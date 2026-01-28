@@ -1,4 +1,4 @@
-"""Простой списочек валют, чтоб не забыть что поддерживаем (потом может поправлю)."""
+"""Список валют, чтобы не забыть что поддерживаем (если что допишу позже)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Iterable
 
 from valutatrade_hub.core.exceptions import InvalidCurrencyError
 
-# Поддерживаемые валюты (базовый набор из итогового проекта)
+# базовый набор, ничего хитрого
 SUPPORTED_CURRENCIES: tuple[str, ...] = (
     "USD",
     "EUR",
@@ -19,17 +19,17 @@ SUPPORTED_CURRENCIES: tuple[str, ...] = (
 
 
 def get_supported_currencies() -> tuple[str, ...]:
-    """Вернуть кортеж кодов поддерживаемых валют."""
+    """Возвращаю кортеж всех кодов, на память."""
     return SUPPORTED_CURRENCIES
 
 
 def is_supported(code: str) -> bool:
-    """Проверка, что валюта есть в списке SUPPORTED_CURRENCIES."""
+    """Просто проверка что валюта в списке, без магии."""
     return code.upper() in SUPPORTED_CURRENCIES
 
 
 def ensure_supported(code: str) -> str:
-    """Вернуть верхний регистр кода или бросить InvalidCurrencyError."""
+    """Поднимаю InvalidCurrencyError если код левых рук."""
     upper = code.upper()
     if not is_supported(upper):
         raise InvalidCurrencyError(upper)
@@ -37,10 +37,10 @@ def ensure_supported(code: str) -> str:
 
 
 def format_pair_key(base: str, quote: str) -> str:
-    """Сформировать ключ пары, например BTC_USD."""
+    """Склеиваю пару типа BTC_USD (на всяк)."""
     return f"{base.upper()}_{quote.upper()}"
 
 
 def filter_supported(codes: Iterable[str]) -> list[str]:
-    """Оставить только поддерживаемые коды валют."""
+    """Отбрасываю всё лишнее, оставляю только известные валюты."""
     return [c.upper() for c in codes if is_supported(c)]

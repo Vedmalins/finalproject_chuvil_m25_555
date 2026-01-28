@@ -1,4 +1,4 @@
-"""Тут модели, типо юзер/кошелек, дописываю по ходу, сорян за опечатки."""
+"""Модели проекта, пишу как студент, могу ошибаца, потом поправлю."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from valutatrade_hub.core.exceptions import InsufficientFundsError, ValidationEr
 
 
 class User:
-    """Пользователь системы: хранит имя и защищённый пароль."""
+    """Просто юзер: держим логин и хэш пароля, ничего магического."""
 
     MIN_PASSWORD_LENGTH = 4
 
@@ -33,10 +33,10 @@ class User:
         self._salt = salt
         self._registration_date = registration_date or datetime.now()
 
-    # ---------- фабрики ----------
+    # фабрика: создаёт с нуля, сама солит/хешит
     @classmethod
     def create_new(cls, user_id: int, username: str, password: str) -> "User":
-        """Создать пользователя, автоматически захешировав пароль."""
+        """Сборка нового юзера, если пароль не слишком короткий."""
         if len(password) < cls.MIN_PASSWORD_LENGTH:
             raise ValidationError(
                 f"Пароль должен быть минимум {cls.MIN_PASSWORD_LENGTH} символов"
@@ -54,7 +54,7 @@ class User:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "User":
-        """Восстановить пользователя из словаря (например, из JSON)."""
+        """Читает юзера из словаря (например из json)."""
         reg_date = data.get("registration_date")
         if isinstance(reg_date, str):
             try:
@@ -70,9 +70,9 @@ class User:
             registration_date=reg_date,
         )
 
-    # ---------- преобразования ----------
+    # конвертация в dict для сохранения
     def to_dict(self) -> dict[str, Any]:
-        """Преобразовать в словарь для хранения."""
+        """Возвращаю dict чтобы сохранить где-нибудь."""
         return {
             "user_id": self._user_id,
             "username": self._username,
@@ -82,14 +82,14 @@ class User:
         }
 
     def get_user_info(self) -> dict[str, Any]:
-        """Информация о пользователе без пароля."""
+        """Инфо про юзера без пароля, на всяк."""
         return {
             "user_id": self._user_id,
             "username": self._username,
             "registration_date": self._registration_date.isoformat(),
         }
 
-    # ---------- операции с паролем ----------
+    # работа с паролем
     def verify_password(self, password: str) -> bool:
         hashed = self._hash_password(password, self._salt)
         return secrets.compare_digest(hashed, self._hashed_password)
@@ -102,7 +102,7 @@ class User:
         self._salt = self._generate_salt()
         self._hashed_password = self._hash_password(new_password, self._salt)
 
-    # ---------- вспомогательные ----------
+    # внутрянка
     @staticmethod
     def _generate_salt() -> str:
         return os.urandom(16).hex()
@@ -111,7 +111,7 @@ class User:
     def _hash_password(password: str, salt: str) -> str:
         return hashlib.sha256((password + salt).encode("utf-8")).hexdigest()
 
-    # ---------- свойства ----------
+    # свойства
     @property
     def user_id(self) -> int:
         return self._user_id
@@ -140,9 +140,9 @@ class User:
         )
 
 
-# Заглушки для последующих шагов
-class Wallet:  # pragma: no cover - будет реализован в следующем шаге
-    """Кошелёк для одной валюты: пополнение, снятие, баланс."""
+# кошелёк: держит баланс одной валюты
+class Wallet:  # pragma: no cover
+    """Кошелёк одной валюты: кладу/снимаю, смотрю баланс."""
 
     def __init__(self, currency_code: str, balance: float = 0.0) -> None:
         if not currency_code or not currency_code.strip():
@@ -151,18 +151,18 @@ class Wallet:  # pragma: no cover - будет реализован в след�
         self.currency_code = currency_code.upper().strip()
         self._balance = 0.0
         if balance != 0.0:
-            self.balance = balance  # пройдёт через валидацию сеттера
+            self.balance = balance  # проходит через валидацию сеттера
 
-    # ---------- фабрика ----------
+    # фабрика из словаря
     @classmethod
     def from_dict(cls, currency_code: str, data: dict[str, Any]) -> "Wallet":
         return cls(currency_code=currency_code, balance=data.get("balance", 0.0))
 
-    # ---------- преобразование ----------
+    # обратно в dict
     def to_dict(self) -> dict[str, Any]:
         return {"balance": self._balance}
 
-    # ---------- операции ----------
+    # операции
     def deposit(self, amount: float) -> None:
         self._validate_amount(amount)
         self._balance += amount
@@ -182,7 +182,7 @@ class Wallet:  # pragma: no cover - будет реализован в след�
             return f"{self.currency_code}: {self._balance:.6f}"
         return f"{self.currency_code}: {self._balance:.2f}"
 
-    # ---------- валидация ----------
+    # валидация
     @staticmethod
     def _validate_amount(amount: float) -> None:
         if not isinstance(amount, (int, float)):
@@ -190,7 +190,7 @@ class Wallet:  # pragma: no cover - будет реализован в след�
         if amount <= 0:
             raise ValidationError("Сумма должна быть больше 0")
 
-    # ---------- свойства ----------
+    # свойства
     @property
     def balance(self) -> float:
         return self._balance
@@ -210,14 +210,14 @@ class Wallet:  # pragma: no cover - будет реализован в след�
         return f"Wallet(currency_code='{self.currency_code}', balance={self._balance})"
 
 
-class Portfolio:  # pragma: no cover - будет реализован в следующем шаге
-    """Портфель пользователя — набор кошельков."""
+class Portfolio:  # pragma: no cover
+    """Портфель юзера — словарик кошельков, без магии."""
 
     def __init__(self, user_id: int) -> None:
         self._user_id = user_id
         self._wallets: dict[str, Wallet] = {}
 
-    # ---------- фабрики ----------
+    # сборка из dict
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Portfolio":
         portfolio = cls(user_id=data["user_id"])
@@ -225,14 +225,14 @@ class Portfolio:  # pragma: no cover - будет реализован в сле
             portfolio._wallets[code] = Wallet.from_dict(code, wallet_data)
         return portfolio
 
-    # ---------- преобразование ----------
+    # обратно в dict
     def to_dict(self) -> dict[str, Any]:
         return {
             "user_id": self._user_id,
             "wallets": {code: wallet.to_dict() for code, wallet in self._wallets.items()},
         }
 
-    # ---------- операции ----------
+    # операции над кошельками
     def add_currency(self, currency_code: str) -> None:
         code = currency_code.upper()
         if code not in self._wallets:
@@ -259,14 +259,14 @@ class Portfolio:  # pragma: no cover - будет реализован в сле
                     total += wallet.balance * rates[pair]
         return total
 
-    # ---------- свойства ----------
+    # свойства
     @property
     def user_id(self) -> int:
         return self._user_id
 
     @property
     def wallets(self) -> dict[str, Wallet]:
-        # возвращаем копию, чтобы инкапсулировать внутреннее состояние
+        # отдаю копию, чтоб случайно не поломали
         return dict(self._wallets)
 
     def __str__(self) -> str:
