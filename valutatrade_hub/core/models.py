@@ -8,7 +8,7 @@ import secrets
 from datetime import datetime
 from typing import Any
 
-from valutatrade_hub.core.exceptions import ValidationError
+from valutatrade_hub.core.exceptions import InsufficientFundsError, ValidationError
 
 
 class User:
@@ -170,7 +170,9 @@ class Wallet:  # pragma: no cover - будет реализован в след�
     def withdraw(self, amount: float) -> None:
         self._validate_amount(amount)
         if amount > self._balance:
-            raise ValidationError("Недостаточно средств")  # намеренно упрощённо
+            raise InsufficientFundsError(
+                available=self._balance, required=amount, code=self.currency_code
+            )
         self._balance -= amount
 
     def get_balance_info(self) -> str:
@@ -209,4 +211,66 @@ class Wallet:  # pragma: no cover - будет реализован в след�
 
 
 class Portfolio:  # pragma: no cover - будет реализован в следующем шаге
-    pass
+    """Портфель пользователя — набор кошельков."""
+
+    def __init__(self, user_id: int) -> None:
+        self._user_id = user_id
+        self._wallets: dict[str, Wallet] = {}
+
+    # ---------- фабрики ----------
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Portfolio":
+        portfolio = cls(user_id=data["user_id"])
+        for code, wallet_data in data.get("wallets", {}).items():
+            portfolio._wallets[code] = Wallet.from_dict(code, wallet_data)
+        return portfolio
+
+    # ---------- преобразование ----------
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "user_id": self._user_id,
+            "wallets": {code: wallet.to_dict() for code, wallet in self._wallets.items()},
+        }
+
+    # ---------- операции ----------
+    def add_currency(self, currency_code: str) -> None:
+        code = currency_code.upper()
+        if code not in self._wallets:
+            self._wallets[code] = Wallet(code)
+
+    def get_wallet(self, currency_code: str) -> Wallet | None:
+        return self._wallets.get(currency_code.upper())
+
+    def get_or_create_wallet(self, currency_code: str) -> Wallet:
+        code = currency_code.upper()
+        if code not in self._wallets:
+            self._wallets[code] = Wallet(code)
+        return self._wallets[code]
+
+    def get_total_value(self, rates: dict[str, float], base: str = "USD") -> float:
+        total = 0.0
+        base = base.upper()
+        for code, wallet in self._wallets.items():
+            if code == base:
+                total += wallet.balance
+            else:
+                pair = f"{code}_{base}"
+                if pair in rates:
+                    total += wallet.balance * rates[pair]
+        return total
+
+    # ---------- свойства ----------
+    @property
+    def user_id(self) -> int:
+        return self._user_id
+
+    @property
+    def wallets(self) -> dict[str, Wallet]:
+        # возвращаем копию, чтобы инкапсулировать внутреннее состояние
+        return dict(self._wallets)
+
+    def __str__(self) -> str:
+        return f"Portfolio(user_id={self._user_id}, wallets={list(self._wallets.keys())})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
