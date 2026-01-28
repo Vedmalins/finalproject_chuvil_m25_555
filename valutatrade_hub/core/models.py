@@ -142,7 +142,70 @@ class User:
 
 # Заглушки для последующих шагов
 class Wallet:  # pragma: no cover - будет реализован в следующем шаге
-    pass
+    """Кошелёк для одной валюты: пополнение, снятие, баланс."""
+
+    def __init__(self, currency_code: str, balance: float = 0.0) -> None:
+        if not currency_code or not currency_code.strip():
+            raise ValidationError("Код валюты не может быть пустым")
+
+        self.currency_code = currency_code.upper().strip()
+        self._balance = 0.0
+        if balance != 0.0:
+            self.balance = balance  # пройдёт через валидацию сеттера
+
+    # ---------- фабрика ----------
+    @classmethod
+    def from_dict(cls, currency_code: str, data: dict[str, Any]) -> "Wallet":
+        return cls(currency_code=currency_code, balance=data.get("balance", 0.0))
+
+    # ---------- преобразование ----------
+    def to_dict(self) -> dict[str, Any]:
+        return {"balance": self._balance}
+
+    # ---------- операции ----------
+    def deposit(self, amount: float) -> None:
+        self._validate_amount(amount)
+        self._balance += amount
+
+    def withdraw(self, amount: float) -> None:
+        self._validate_amount(amount)
+        if amount > self._balance:
+            raise ValidationError("Недостаточно средств")  # намеренно упрощённо
+        self._balance -= amount
+
+    def get_balance_info(self) -> str:
+        if self.currency_code in ("BTC", "ETH"):
+            return f"{self.currency_code}: {self._balance:.8f}"
+        if self.currency_code in ("SOL",):
+            return f"{self.currency_code}: {self._balance:.6f}"
+        return f"{self.currency_code}: {self._balance:.2f}"
+
+    # ---------- валидация ----------
+    @staticmethod
+    def _validate_amount(amount: float) -> None:
+        if not isinstance(amount, (int, float)):
+            raise ValidationError("Сумма должна быть числом")
+        if amount <= 0:
+            raise ValidationError("Сумма должна быть больше 0")
+
+    # ---------- свойства ----------
+    @property
+    def balance(self) -> float:
+        return self._balance
+
+    @balance.setter
+    def balance(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise ValidationError("Баланс должен быть числом")
+        if value < 0:
+            raise ValidationError("Баланс не может быть отрицательным")
+        self._balance = float(value)
+
+    def __str__(self) -> str:
+        return self.get_balance_info()
+
+    def __repr__(self) -> str:
+        return f"Wallet(currency_code='{self.currency_code}', balance={self._balance})"
 
 
 class Portfolio:  # pragma: no cover - будет реализован в следующем шаге
