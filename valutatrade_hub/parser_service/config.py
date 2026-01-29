@@ -29,8 +29,8 @@ EXCHANGERATE_API_KEY = os.getenv("EXCHANGERATE_API_KEY", "").strip()
 
 BASE_FIAT_CURRENCY = "USD"
 
-# криптовалюты: код -> id в coingecko
-CRYPTO_CURRENCIES = {
+# криптовалюты: код -> id в coingecko (только нужные тикеры, без tether)
+CRYPTO_ID_MAP = {
     "BTC": "bitcoin",
     "ETH": "ethereum",
     "SOL": "solana",

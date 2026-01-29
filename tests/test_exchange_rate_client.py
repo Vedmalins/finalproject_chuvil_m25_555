@@ -59,7 +59,7 @@ def test_coingecko_client_maps_ids_to_codes(monkeypatch) -> None:
     monkeypatch.setattr(api_clients.requests, "get", fake_get)
     monkeypatch.setattr(
         api_clients,
-        "CRYPTO_CURRENCIES",
+        "CRYPTO_ID_MAP",
         {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"},
     )
 

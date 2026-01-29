@@ -12,7 +12,7 @@ from valutatrade_hub.logging_config import get_logger
 from valutatrade_hub.parser_service.config import (
     BASE_FIAT_CURRENCY,
     COINGECKO_API_URL,
-    CRYPTO_CURRENCIES,
+    CRYPTO_ID_MAP,
     EXCHANGERATE_API_URL,
     EXCHANGERATE_API_KEY,
     FIAT_CURRENCIES,
@@ -78,7 +78,7 @@ class CoinGeckoClient(BaseApiClient):
 
     def fetch_rates(self) -> dict[str, Any]:
         """Возвращает словарь код -> {usd: rate}."""
-        coin_ids = ",".join(CRYPTO_CURRENCIES.values())
+        coin_ids = ",".join(CRYPTO_ID_MAP.values())
         url = f"{self.base_url}/simple/price"
         params = {"ids": coin_ids, "vs_currencies": "usd"}
 
@@ -88,7 +88,7 @@ class CoinGeckoClient(BaseApiClient):
             return {}
 
         result: dict[str, Any] = {}
-        for code, cid in CRYPTO_CURRENCIES.items():
+        for code, cid in CRYPTO_ID_MAP.items():
             if cid in data:
                 result[code] = data[cid]
 
@@ -118,7 +118,9 @@ class ExchangeRateClient(BaseApiClient):
             return {}
 
         conversion_rates = data["conversion_rates"]
-        filtered = {cur: conversion_rates[cur] for cur in FIAT_CURRENCIES if cur in conversion_rates}
+        # If FIAT_CURRENCIES is defined, we previously filtered.
+        # Requirement now: persist all rates returned by API.
+        filtered = conversion_rates
         base_code = data.get("base_code") or BASE_FIAT_CURRENCY
         result = {"base": base_code, "rates": filtered}
         self.logger.info(f"Курсы фиата: {list(filtered.keys())}")
