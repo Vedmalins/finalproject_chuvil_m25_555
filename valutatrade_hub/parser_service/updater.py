@@ -24,17 +24,44 @@ class RatesUpdater:
         """Один цикл обновления: crypto + fiat."""
         get_settings().get("last_refresh") or None  # not used; just to satisfy type
 
+        timestamp = self._utc_now_iso()
+
         crypto = self.crypto_client.fetch_rates()
-        if crypto:
-            crypto["_meta"] = {"updated_at": self._utc_now_iso()}
-            self.storage.db.save_crypto_rates(crypto)
-
         fiat = self.fiat_client.fetch_rates()
-        if fiat:
-            fiat["_meta"] = {"updated_at": self._utc_now_iso()}
-            self.storage.db.save_fiat_rates(fiat)
 
-        self.logger.info("Курсы обновлены")
+        pairs: dict[str, dict[str, str | float]] = {}
+
+        if crypto:
+            for code, data in crypto.items():
+                if code.startswith("_"):
+                    continue
+                rate = data.get("usd")
+                if rate is None:
+                    continue
+                pairs[f"{code}_USD"] = {
+                    "rate": rate,
+                    "updated_at": timestamp,
+                    "source": "CoinGecko",
+                }
+
+        if fiat and "rates" in fiat:
+            base = fiat.get("base", "USD")
+            for code, rate in fiat["rates"].items():
+                if rate is None:
+                    continue
+                pair_key = f"{code}_{base}"
+                pairs[pair_key] = {
+                    "rate": rate,
+                    "updated_at": timestamp,
+                    "source": "ExchangeRate-API",
+                }
+
+        if pairs:
+            cache = {"pairs": pairs, "last_refresh": timestamp}
+            self.storage.db.save_rates_cache(cache)
+            self.logger.info(f"Курсы обновлены, всего пар: {len(pairs)}")
+        else:
+            self.logger.warning("Не удалось получить ни одного курса")
 
     @staticmethod
     def _utc_now_iso() -> str:

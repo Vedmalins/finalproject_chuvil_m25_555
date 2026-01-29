@@ -13,22 +13,31 @@ class RatesStorage:
 
     def get_crypto_rate(self, code: str) -> float | None:
         """Курс крипты к USD."""
-        rates = self.db.get_crypto_rates()
-        code = code.upper()
-        if code in rates:
-            return rates[code].get("usd")
+        cache = self.db.get_rates_cache()
+        pairs = cache.get("pairs", {})
+        key = f"{code.upper()}_USD"
+        entry = pairs.get(key)
+        if entry:
+            return entry.get("rate")
         return None
 
     def get_fiat_rate(self, code: str) -> float | None:
         """Курс фиата к USD (переворачиваем, в файле хранится USD->валюта)."""
-        rates = self.db.get_fiat_rates()
+        cache = self.db.get_rates_cache()
+        pairs = cache.get("pairs", {})
         code = code.upper()
         if code == "USD":
             return 1.0
-        if "rates" in rates and code in rates["rates"]:
-            usd_to_currency = rates["rates"][code]
-            if usd_to_currency and usd_to_currency != 0:
-                return 1 / usd_to_currency
+        key = f"{code}_USD"
+        # если есть прямой курс к USD
+        if key in pairs:
+            return pairs[key].get("rate")
+        # иначе попробуем перевернуть USD->code
+        reverse_key = f"USD_{code}"
+        if reverse_key in pairs:
+            rate = pairs[reverse_key].get("rate")
+            if rate:
+                return 1 / rate
         return None
 
     def get_rate(self, code: str) -> float | None:
@@ -40,24 +49,30 @@ class RatesStorage:
 
     def get_all_rates(self) -> dict[str, float]:
         """Все курсы к USD, без метаданных."""
+        cache = self.db.get_rates_cache()
+        pairs = cache.get("pairs", {})
         result: dict[str, float] = {}
-
-        crypto = self.db.get_crypto_rates()
-        for code, data in crypto.items():
-            if code.startswith("_"):
+        for pair, data in pairs.items():
+            try:
+                code, base = pair.split("_", 1)
+            except ValueError:
                 continue
-            if isinstance(data, dict) and "usd" in data:
-                result[code] = data["usd"]
-
-        fiat = self.db.get_fiat_rates()
-        if "rates" in fiat:
-            for code, rate in fiat["rates"].items():
-                if code == "USD":
-                    result[code] = 1.0
-                elif rate and rate != 0:
-                    result[code] = 1 / rate
-
+            if base != "USD":
+                continue
+            rate = data.get("rate")
+            if rate:
+                result[code] = rate
         return result
+
+    def get_rate_with_timestamp(self, code: str) -> tuple[float | None, str | None]:
+        """Возвращает курс и время обновления для TTL-проверки."""
+        cache = self.db.get_rates_cache()
+        pairs = cache.get("pairs", {})
+        key = f"{code.upper()}_USD"
+        entry = pairs.get(key)
+        if not entry:
+            return None, None
+        return entry.get("rate"), entry.get("updated_at") or cache.get("last_refresh")
 
 
 def get_storage() -> RatesStorage:

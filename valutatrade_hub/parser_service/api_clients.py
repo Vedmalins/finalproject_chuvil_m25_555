@@ -10,9 +10,11 @@ from requests import Response
 
 from valutatrade_hub.logging_config import get_logger
 from valutatrade_hub.parser_service.config import (
+    BASE_FIAT_CURRENCY,
     COINGECKO_API_URL,
     CRYPTO_CURRENCIES,
     EXCHANGERATE_API_URL,
+    EXCHANGERATE_API_KEY,
     FIAT_CURRENCIES,
     REQUEST_TIMEOUT,
 )
@@ -100,18 +102,24 @@ class ExchangeRateClient(BaseApiClient):
     def __init__(self) -> None:
         super().__init__()
         self.base_url = EXCHANGERATE_API_URL
+        self.api_key = EXCHANGERATE_API_KEY
 
     def fetch_rates(self) -> dict[str, Any]:
         """USD база, фильтруем только нужные валюты."""
-        url = f"{self.base_url}/USD"
+        if not self.api_key:
+            self.logger.error("EXCHANGERATE_API_KEY не задан, запросы к ExchangeRate отключены")
+            return {}
+
+        url = f"{self.base_url}/{self.api_key}/latest/{BASE_FIAT_CURRENCY}"
         data = self._make_request(url)
 
-        if not data or "rates" not in data:
+        if not data or data.get("result") != "success" or "rates" not in data:
             self.logger.warning("Не удалось получить курсы фиата")
             return {}
 
         filtered = {cur: data["rates"][cur] for cur in FIAT_CURRENCIES if cur in data["rates"]}
-        result = {"base": "USD", "rates": filtered}
+        base_code = data.get("base_code") or BASE_FIAT_CURRENCY
+        result = {"base": base_code, "rates": filtered}
         self.logger.info(f"Курсы фиата: {list(filtered.keys())}")
         return result
 

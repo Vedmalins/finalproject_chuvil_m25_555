@@ -52,8 +52,8 @@ finalproject_chuvil_m25_555/
 ## Основные команды CLI
 - `register` — регистрация пользователя.
 - `login` — вход.
-- `rates` — показать все курсы из локального кэша.
-- `rate <CODE>` — курс конкретной валюты.
+- `rates` — показать актуальные курсы из .
+- `rate <CODE>` — курс конкретной валюты из CoinGecko и ExchangeRate-API.
 - `update` — обновить курсы (Parser Service: CoinGecko + ExchangeRate).
 - `portfolio` — показать портфель (после login).
 - `buy <CODE> <USD>` — купить валюту.

@@ -31,7 +31,6 @@ class DatabaseManager:
             "users.json": {},
             "portfolios.json": {},
             "rates.json": {},
-            "exchange_rates.json": {},
         }
         for name, content in defaults.items():
             path = self._data_dir / name
@@ -84,17 +83,53 @@ class DatabaseManager:
         self._write_json(self._data_dir / "portfolios.json", portfolios)
 
     # работа с курсами
-    def get_crypto_rates(self) -> dict[str, Any]:
+    def get_rates_cache(self) -> dict[str, Any]:
+        """Текущее объединённое состояние курсов."""
         return self._read_json(self._data_dir / "rates.json")
 
+    def save_rates_cache(self, cache: dict[str, Any]) -> None:
+        """Сохраняет объединённый кэш курсов."""
+        self._write_json(self._data_dir / "rates.json", cache)
+
+    # обратная совместимость: собираем данные из кэша
+    def get_crypto_rates(self) -> dict[str, Any]:
+        cache = self.get_rates_cache()
+        pairs = cache.get("pairs", {})
+        crypto: dict[str, Any] = {"_meta": {"updated_at": cache.get("last_refresh")}}
+        for pair, payload in pairs.items():
+            if pair.endswith("_USD"):
+                code = pair.split("_")[0]
+                crypto[code] = {"usd": payload.get("rate")}
+        return crypto
+
     def save_crypto_rates(self, rates: dict[str, Any]) -> None:
-        self._write_json(self._data_dir / "rates.json", rates)
+        # оставлено для совместимости тестов — направляем в save_rates_cache
+        cache = self.get_rates_cache()
+        cache.update(rates)
+        self.save_rates_cache(cache)
 
     def get_fiat_rates(self) -> dict[str, Any]:
-        return self._read_json(self._data_dir / "exchange_rates.json")
+        cache = self.get_rates_cache()
+        pairs = cache.get("pairs", {})
+        fiat_rates: dict[str, Any] = {"rates": {}, "_meta": {"updated_at": cache.get("last_refresh")}}
+        for pair, payload in pairs.items():
+            if pair.endswith("_USD"):
+                continue
+            try:
+                code, base = pair.split("_", 1)
+            except ValueError:
+                continue
+            if base == "USD":
+                # в кэше храним rate как from->base, а здесь нужно USD->code
+                rate = payload.get("rate")
+                if rate and rate != 0:
+                    fiat_rates["rates"][code] = 1 / rate
+        return fiat_rates
 
     def save_fiat_rates(self, rates: dict[str, Any]) -> None:
-        self._write_json(self._data_dir / "exchange_rates.json", rates)
+        cache = self.get_rates_cache()
+        cache.update(rates)
+        self.save_rates_cache(cache)
 
     def get_rate(self, currency_code: str) -> float | None:
         code = currency_code.upper()

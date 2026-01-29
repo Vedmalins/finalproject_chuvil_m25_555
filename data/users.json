@@ -1,1 +1,8 @@
-﻿[]
+{
+  "alina": {
+    "id": "7ba2382e-5569-4570-a021-055272477834",
+    "username": "alina",
+    "password_hash": "874296771feca16ef3e44441c0c51ef74c4187e675d1b9ca25c168508183b38b",
+    "created_at": null
+  }
+}

@@ -164,6 +164,11 @@ class TradingCLI:
 
     def _cmd_rates(self, args: list[str]) -> None:
         """Показывает таблицу курсов."""
+        try:
+            run_once()
+        except Exception as exc:
+            self.logger.error(f"update fail: {exc}")
+            print(f"Ошибка обновления курсов: {exc}")
         rates = get_all_rates()
         if not rates:
             print("Курсы пустые, попробуйте update")

@@ -157,33 +157,19 @@ def sell(user_id: str, currency_code: str, amount: float) -> dict[str, Any]:
 
 def get_rate(currency_code: str) -> dict[str, Any]:
     """Возвращает курс валюты к USD или кидает ошибку."""
-    db = get_database()
-
-    currency_code = currency_code.upper()
     settings = get_settings()
     ttl = settings.get("rates_ttl_seconds", 300)
 
-    crypto = db.get_crypto_rates()
-    fiat = db.get_fiat_rates()
-
-    updated_at = None
-    rate = None
-
-    if currency_code in crypto:
-        rate = crypto[currency_code].get("usd")
-        updated_at = crypto.get("_meta", {}).get("updated_at")
-    elif "rates" in fiat and currency_code in fiat["rates"]:
-        val = fiat["rates"][currency_code]
-        rate = 1 / val if val else None
-        updated_at = fiat.get("_meta", {}).get("updated_at")
+    storage = get_storage()
+    rate, updated_at = storage.get_rate_with_timestamp(currency_code)
 
     if rate is None:
-        raise InvalidCurrencyError(currency_code)
+        raise InvalidCurrencyError(currency_code.upper())
 
     if _is_stale(updated_at, ttl):
-        raise StaleRatesError(f"{currency_code}->USD", updated_at)
+        raise StaleRatesError(f"{currency_code.upper()}->USD", updated_at)
 
-    return {"currency_code": currency_code, "rate": rate}
+    return {"currency_code": currency_code.upper(), "rate": rate}
 
 
 def _is_stale(updated_at: str | None, ttl_seconds: int) -> bool:
