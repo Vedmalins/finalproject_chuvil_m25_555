@@ -1,0 +1,1 @@
+install:\n\tpoetry install\n\nproject:\n\tpoetry run project\n\nbuild:\n\tpoetry build\n\npublish:\n\tpoetry publish --dry-run\n\npackage-install:\n\tpython3 -m pip install dist/*.whl\n\nlint:\n\tpoetry run ruff check .\n
