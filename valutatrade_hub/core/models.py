@@ -35,7 +35,7 @@ class User:
 
     # фабрика: создаёт с нуля, сама солит/хешит
     @classmethod
-    def create_new(cls, user_id: int, username: str, password: str) -> "User":
+    def create_new(cls, user_id: int, username: str, password: str) -> User:
         """Сборка нового юзера, если пароль не слишком короткий."""
         if len(password) < cls.MIN_PASSWORD_LENGTH:
             raise ValidationError(
@@ -53,7 +53,7 @@ class User:
         )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "User":
+    def from_dict(cls, data: dict[str, Any]) -> User:
         """Читает юзера из словаря (например из json)."""
         reg_date = data.get("registration_date")
         if isinstance(reg_date, str):
@@ -155,7 +155,7 @@ class Wallet:  # pragma: no cover
 
     # фабрика из словаря
     @classmethod
-    def from_dict(cls, currency_code: str, data: dict[str, Any]) -> "Wallet":
+    def from_dict(cls, currency_code: str, data: dict[str, Any]) -> Wallet:
         return cls(currency_code=currency_code, balance=data.get("balance", 0.0))
 
     # обратно в dict
@@ -219,7 +219,7 @@ class Portfolio:  # pragma: no cover
 
     # сборка из dict
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Portfolio":
+    def from_dict(cls, data: dict[str, Any]) -> Portfolio:
         portfolio = cls(user_id=data["user_id"])
         for code, wallet_data in data.get("wallets", {}).items():
             portfolio._wallets[code] = Wallet.from_dict(code, wallet_data)

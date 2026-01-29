@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import time
 
 from valutatrade_hub.logging_config import get_logger
 from valutatrade_hub.parser_service.config import UPDATE_INTERVAL

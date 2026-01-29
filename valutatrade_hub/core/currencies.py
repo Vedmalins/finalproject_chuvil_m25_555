@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from typing import ClassVar, Iterable
+from collections.abc import Iterable
+from typing import ClassVar
 
 from valutatrade_hub.core.exceptions import CurrencyNotFoundError, InvalidCurrencyError
 

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from valutatrade_hub.infra.settings import get_settings
 from valutatrade_hub.logging_config import get_logger
 from valutatrade_hub.parser_service.api_clients import (
     create_crypto_client,
     create_fiat_client,
 )
 from valutatrade_hub.parser_service.storage import get_storage
-from valutatrade_hub.infra.settings import get_settings
 
 
 class RatesUpdater:
@@ -22,8 +22,7 @@ class RatesUpdater:
 
     def update(self) -> None:
         """Один цикл обновления: crypto + fiat."""
-        timestamp = get_settings().get("last_refresh") or None  # not used; just to satisfy type
-        timestamp = None  # ensure we set fresh time below
+        get_settings().get("last_refresh") or None  # not used; just to satisfy type
 
         crypto = self.crypto_client.fetch_rates()
         if crypto:

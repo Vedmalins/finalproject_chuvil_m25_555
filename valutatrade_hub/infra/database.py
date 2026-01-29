@@ -13,10 +13,10 @@ from valutatrade_hub.infra.settings import get_settings
 class DatabaseManager:
     """Singleton для работы с файлами users/portfolios/rates."""
 
-    _instance: "DatabaseManager | None" = None
+    _instance: DatabaseManager | None = None
     _data_dir: Path
 
-    def __new__(cls, data_dir: Path | None = None) -> "DatabaseManager":
+    def __new__(cls, data_dir: Path | None = None) -> DatabaseManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             settings = get_settings()

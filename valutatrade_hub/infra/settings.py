@@ -12,11 +12,11 @@ DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "config.json"
 class SettingsLoader:
     """Singleton для конфигов, чтобы загрузка была один раз."""
 
-    _instance: "SettingsLoader | None" = None
+    _instance: SettingsLoader | None = None
     _settings: dict[str, Any] = {}
     _config_path: Path | None = None
 
-    def __new__(cls, config_path: Path | None = None) -> "SettingsLoader":
+    def __new__(cls, config_path: Path | None = None) -> SettingsLoader:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._config_path = config_path or DEFAULT_CONFIG_PATH
