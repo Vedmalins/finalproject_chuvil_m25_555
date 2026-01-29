@@ -185,7 +185,7 @@ class Wallet:  # pragma: no cover
     # валидация
     @staticmethod
     def _validate_amount(amount: float) -> None:
-        if not isinstance(amount, (int, float)):
+        if not isinstance(amount, int | float):
             raise ValidationError("Сумма должна быть числом")
         if amount <= 0:
             raise ValidationError("Сумма должна быть больше 0")
@@ -197,7 +197,7 @@ class Wallet:  # pragma: no cover
 
     @balance.setter
     def balance(self, value: float) -> None:
-        if not isinstance(value, (int, float)):
+        if not isinstance(value, int | float):
             raise ValidationError("Баланс должен быть числом")
         if value < 0:
             raise ValidationError("Баланс не может быть отрицательным")
