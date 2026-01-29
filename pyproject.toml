@@ -1,10 +1,10 @@
-﻿[tool.poetry]
+[tool.poetry]
 name = "finalproject_chuvil_m25_555"
 version = "0.1.0"
-description = "Симулятор валютного кошелька и торговой платформы"
+description = "????????? ????????? ???????? ? ???????? ?????????"
 authors = ["Alina Chuvil <alina.chuvil@student.edu>"]
 readme = "README.md"
-packages = [{include = "valutatrade_hub"}]
+packages = [{ include = "valutatrade_hub" }]
 
 [tool.poetry.scripts]
 project = "valutatrade_hub.cli.interface:main"
