@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import requests
+from requests import Response
 
 from valutatrade_hub.logging_config import get_logger
 from valutatrade_hub.parser_service.config import (
@@ -32,11 +33,38 @@ class BaseApiClient(ABC):
         """GET запрос с таймаутом, ошибки логируются."""
         try:
             resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            return resp.json()
         except requests.RequestException as e:
-            self.logger.error(f"Запрос к {url} упал: {e}")
+            self.logger.error(f"Запрос к {url} не выполнен: {e}")
             return {}
+
+        if not self._is_success(resp):
+            self._log_bad_status(resp)
+            return {}
+
+        try:
+            return resp.json()
+        except ValueError:
+            self.logger.error(f"Невалидный JSON от {url}")
+            return {}
+
+    def _is_success(self, resp: Response) -> bool:
+        return 200 <= resp.status_code < 300
+
+    def _log_bad_status(self, resp: Response) -> None:
+        code = resp.status_code
+        if code == 401:
+            level = self.logger.warning
+            msg = "401 Unauthorized"
+        elif code == 429:
+            level = self.logger.warning
+            msg = "429 Too Many Requests"
+        elif code >= 500:
+            level = self.logger.error
+            msg = f"{code} Server Error"
+        else:
+            level = self.logger.warning
+            msg = f"{code} Unexpected status"
+        level(f"{msg} для {resp.url}")
 
 
 class CoinGeckoClient(BaseApiClient):
