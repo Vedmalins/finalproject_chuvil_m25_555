@@ -39,6 +39,7 @@ class SettingsLoader:
             "data_dir": "data",
             "log_dir": "logs",
             "log_level": "INFO",
+            "rates_ttl_seconds": 300,
             "api": {
                 "coingecko_url": "https://api.coingecko.com/api/v3",
                 "exchangerate_url": "https://api.exchangerate-api.com/v4/latest",

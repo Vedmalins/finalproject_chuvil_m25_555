@@ -12,6 +12,7 @@ from valutatrade_hub.core.exceptions import (
     AuthenticationError,
     InsufficientFundsError,
     InvalidCurrencyError,
+    StaleRatesError,
     UserAlreadyExistsError,
     UserNotFoundError,
     ValidationError,
@@ -185,6 +186,8 @@ class TradingCLI:
             print(f"{args[0].upper()} = {res['rate']:,.4f} USD")
         except InvalidCurrencyError as exc:
             print(f"Ошибка: {exc}")
+        except StaleRatesError as exc:
+            print(f"Ошибка: {exc}")
 
     def _cmd_update(self, args: list[str]) -> None:
         """Тянет свежие курсы из сетки."""
@@ -229,6 +232,8 @@ class TradingCLI:
             print(f"Куплено {res['amount']:,.6f} {args[0].upper()} по {res['rate']:,.4f}")
         except (InvalidCurrencyError, ValidationError) as exc:
             print(f"Ошибка: {exc}")
+        except StaleRatesError as exc:
+            print(f"Ошибка: {exc}")
         except Exception as exc:
             self.logger.error(f"buy fail: {exc}")
             print(f"Ошибка: {exc}")
@@ -243,6 +248,8 @@ class TradingCLI:
             res = sell(self.current_user["user_id"], args[0].upper(), qty)
             print(f"Продано {qty:,.6f} {args[0].upper()} за {res['usd_received']:,.2f} USD")
         except (InvalidCurrencyError, InsufficientFundsError, ValidationError) as exc:
+            print(f"Ошибка: {exc}")
+        except StaleRatesError as exc:
             print(f"Ошибка: {exc}")
         except Exception as exc:
             self.logger.error(f"sell fail: {exc}")

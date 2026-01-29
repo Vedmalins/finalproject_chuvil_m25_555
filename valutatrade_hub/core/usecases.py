@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from datetime import datetime, timezone
+
 from valutatrade_hub.core.exceptions import (
     AuthenticationError,
     InvalidCurrencyError,
+    StaleRatesError,
     UserAlreadyExistsError,
     UserNotFoundError,
     ValidationError,
@@ -14,6 +17,7 @@ from valutatrade_hub.core.exceptions import (
 from valutatrade_hub.core.utils import generate_user_id, hash_password, verify_password
 from valutatrade_hub.decorators import log_action
 from valutatrade_hub.infra.database import get_database
+from valutatrade_hub.infra.settings import get_settings
 
 
 @log_action("REGISTER")
@@ -157,11 +161,42 @@ def get_rate(currency_code: str) -> dict[str, Any]:
     db = get_database()
 
     currency_code = currency_code.upper()
-    rate = db.get_rate(currency_code)
-    if not rate:
+    settings = get_settings()
+    ttl = settings.get("rates_ttl_seconds", 300)
+
+    crypto = db.get_crypto_rates()
+    fiat = db.get_fiat_rates()
+
+    updated_at = None
+    rate = None
+
+    if currency_code in crypto:
+        rate = crypto[currency_code].get("usd")
+        updated_at = crypto.get("_meta", {}).get("updated_at")
+    elif "rates" in fiat and currency_code in fiat["rates"]:
+        val = fiat["rates"][currency_code]
+        rate = 1 / val if val else None
+        updated_at = fiat.get("_meta", {}).get("updated_at")
+
+    if rate is None:
         raise InvalidCurrencyError(currency_code)
 
+    if _is_stale(updated_at, ttl):
+        raise StaleRatesError(f"{currency_code}->USD", updated_at)
+
     return {"currency_code": currency_code, "rate": rate}
+
+
+def _is_stale(updated_at: str | None, ttl_seconds: int) -> bool:
+    if not updated_at:
+        return True
+    try:
+        ts = datetime.fromisoformat(updated_at)
+    except ValueError:
+        return True
+    now = datetime.now(timezone.utc)
+    delta = (now - ts).total_seconds()
+    return delta > ttl_seconds
 
 
 def get_all_rates() -> dict[str, float]:

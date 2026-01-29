@@ -74,5 +74,15 @@ class RateFetchError(ValutatradeError):
         super().__init__(f"Не удалось получить курс: {reason}")
 
 
+class StaleRatesError(ValutatradeError):
+    """Курсы устарели и требуют обновления."""
+
+    def __init__(self, pair: str, updated_at: str | None = None) -> None:
+        self.pair = pair
+        self.updated_at = updated_at
+        ts_info = f" (обновлено: {updated_at})" if updated_at else ""
+        super().__init__(f"Курс {pair} устарел{ts_info}. Выполните update-rates.")
+
+
 # алиас для совместимости
 ValutaTradeError = ValutatradeError
