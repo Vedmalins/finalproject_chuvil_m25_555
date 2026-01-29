@@ -113,11 +113,12 @@ class ExchangeRateClient(BaseApiClient):
         url = f"{self.base_url}/{self.api_key}/latest/{BASE_FIAT_CURRENCY}"
         data = self._make_request(url)
 
-        if not data or data.get("result") != "success" or "rates" not in data:
+        if not data or data.get("result") != "success" or "conversion_rates" not in data:
             self.logger.warning("Не удалось получить курсы фиата")
             return {}
 
-        filtered = {cur: data["rates"][cur] for cur in FIAT_CURRENCIES if cur in data["rates"]}
+        conversion_rates = data["conversion_rates"]
+        filtered = {cur: conversion_rates[cur] for cur in FIAT_CURRENCIES if cur in conversion_rates}
         base_code = data.get("base_code") or BASE_FIAT_CURRENCY
         result = {"base": base_code, "rates": filtered}
         self.logger.info(f"Курсы фиата: {list(filtered.keys())}")

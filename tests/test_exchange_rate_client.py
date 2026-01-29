@@ -25,7 +25,7 @@ def test_exchange_rate_client_builds_v6_url_and_parses(monkeypatch) -> None:
         payload = {
             "result": "success",
             "base_code": "USD",
-            "rates": {"USD": 1.0, "EUR": 0.92, "RUB": 98.45},
+            "conversion_rates": {"USD": 1.0, "EUR": 0.92, "RUB": 98.45},
         }
         return DummyResponse(200, url, payload)
 

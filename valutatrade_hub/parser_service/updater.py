@@ -29,7 +29,8 @@ class RatesUpdater:
         crypto = self.crypto_client.fetch_rates()
         fiat = self.fiat_client.fetch_rates()
 
-        pairs: dict[str, dict[str, str | float]] = {}
+        existing_cache = self.storage.db.get_rates_cache() or {}
+        pairs: dict[str, dict[str, str | float]] = existing_cache.get("pairs", {}).copy()
 
         if crypto:
             for code, data in crypto.items():
@@ -46,17 +47,23 @@ class RatesUpdater:
 
         if fiat and "rates" in fiat:
             base = fiat.get("base", "USD")
-            for code, rate in fiat["rates"].items():
-                if rate is None:
+            for code, usd_to_code in fiat["rates"].items():
+                if usd_to_code is None or usd_to_code == 0:
                     continue
-                pair_key = f"{code}_{base}"
+                # Храним курс code->USD (обратный к base=USD)
+                if base == "USD":
+                    pair_rate = 1 / usd_to_code
+                    pair_key = f"{code}_USD"
+                else:
+                    pair_rate = usd_to_code
+                    pair_key = f"{code}_{base}"
                 pairs[pair_key] = {
-                    "rate": rate,
+                    "rate": pair_rate,
                     "updated_at": timestamp,
                     "source": "ExchangeRate-API",
                 }
 
-        if pairs:
+        if pairs != existing_cache.get("pairs") or pairs:
             cache = {"pairs": pairs, "last_refresh": timestamp}
             self.storage.db.save_rates_cache(cache)
             self.logger.info(f"Курсы обновлены, всего пар: {len(pairs)}")
