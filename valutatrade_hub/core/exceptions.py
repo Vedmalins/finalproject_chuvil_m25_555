@@ -1,12 +1,12 @@
-"""Пользовательские исключения для finalproject_chuvil_m25_555."""
+"""Пользовательские исключения."""
 
 
 class ValutatradeError(Exception):
-    """Базовое исключение приложения."""
+    """Базовая ошибка, от неё всё остальное наследую."""
 
 
 class InsufficientFundsError(ValutatradeError):
-    """Недостаточно средств на счёте."""
+    """Не хватает денег на балансе, обидно."""
 
     def __init__(self, available: float, required: float, code: str) -> None:
         self.available = available
@@ -19,7 +19,7 @@ class InsufficientFundsError(ValutatradeError):
 
 
 class CurrencyNotFoundError(ValutatradeError):
-    """Запрошенная валюта не найдена."""
+    """Запросили валюту, которой у нас нет."""
 
     def __init__(self, code: str) -> None:
         self.code = code
@@ -27,7 +27,7 @@ class CurrencyNotFoundError(ValutatradeError):
 
 
 class ApiRequestError(ValutatradeError):
-    """Ошибка обращения к внешнему API."""
+    """Что-то пошло не так при обращении к внешнему API."""
 
     def __init__(self, reason: str) -> None:
         self.reason = reason
@@ -35,15 +35,15 @@ class ApiRequestError(ValutatradeError):
 
 
 class AuthenticationError(ValutatradeError):
-    """Ошибка аутентификации."""
+    """Неверный пароль или ещё какая-то auth беда."""
 
 
 class ValidationError(ValutatradeError):
-    """Ошибка валидации входных данных."""
+    """Данные кривые, надо поправить прежде чем работать."""
 
 
 class UserNotFoundError(ValutatradeError):
-    """Пользователь не найден."""
+    """Не нашли пользователя по ид/нику."""
 
     def __init__(self, identifier: str | int) -> None:
         self.identifier = identifier
@@ -51,7 +51,7 @@ class UserNotFoundError(ValutatradeError):
 
 
 class UserAlreadyExistsError(ValutatradeError):
-    """Пользователь уже существует."""
+    """Пользователь с таким именем уже есть, сорян."""
 
     def __init__(self, username: str) -> None:
         self.username = username
@@ -59,7 +59,7 @@ class UserAlreadyExistsError(ValutatradeError):
 
 
 class InvalidCurrencyError(ValutatradeError):
-    """Неверный код валюты."""
+    """Код валюты не похож на настоящий."""
 
     def __init__(self, code: str) -> None:
         self.code = code
@@ -67,12 +67,22 @@ class InvalidCurrencyError(ValutatradeError):
 
 
 class RateFetchError(ValutatradeError):
-    """Ошибка получения курса валюты."""
+    """Не получилось стянуть курс валюты."""
 
     def __init__(self, reason: str) -> None:
         self.reason = reason
         super().__init__(f"Не удалось получить курс: {reason}")
 
 
-# совместимость
+class StaleRatesError(ValutatradeError):
+    """Курсы устарели и требуют обновления."""
+
+    def __init__(self, pair: str, updated_at: str | None = None) -> None:
+        self.pair = pair
+        self.updated_at = updated_at
+        ts_info = f" (обновлено: {updated_at})" if updated_at else ""
+        super().__init__(f"Курс {pair} устарел{ts_info}. Выполните update-rates.")
+
+
+# алиас для совместимости
 ValutaTradeError = ValutatradeError

@@ -1,0 +1,20 @@
+{
+  "alina": {
+    "id": "7ba2382e-5569-4570-a021-055272477834",
+    "username": "alina",
+    "password_hash": "874296771feca16ef3e44441c0c51ef74c4187e675d1b9ca25c168508183b38b",
+    "created_at": null
+  },
+  "sasha": {
+    "id": "5e9ac25c-0585-446f-869b-f8f3c3a93122",
+    "username": "sasha",
+    "password_hash": "297581d6cd198a6e6df740f13288cb13a1e76cebe3f0ebc3fe259977addfd646",
+    "created_at": null
+  },
+  "alica": {
+    "id": "958b6ab8-ec25-4c34-aa68-0e61d1a3e7ce",
+    "username": "alica",
+    "password_hash": "461fac36809ceb0603fc4d841c6ccebccbeae1d011c915f7cc2b8cebba9e534f",
+    "created_at": null
+  }
+}

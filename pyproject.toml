@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "finalproject_chuvil_m25_555"
+version = "0.1.0"
+description = "????????? ????????? ???????? ? ???????? ?????????"
+authors = ["Alina Chuvil <alina.chuvil@student.edu>"]
+readme = "README.md"
+packages = [{ include = "valutatrade_hub" }]
+
+[tool.poetry.scripts]
+project = "main:main"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+prettytable = "^3.9.0"
+requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.1.6"
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.valutatrade]
+DATA_DIR = "data"
+USERS_FILE = "users.json"
+PORTFOLIOS_FILE = "portfolios.json"
+RATES_FILE = "rates.json"
+HISTORY_FILE = "exchange_rates.json"
+RATES_TTL_SECONDS = 300
+DEFAULT_BASE_CURRENCY = "USD"
+LOG_PATH = "logs/actions.log"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
