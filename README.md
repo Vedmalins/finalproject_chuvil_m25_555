@@ -52,7 +52,7 @@ finalproject_chuvil_m25_555/
 - `login --username alice --password 1234` — вход.
 - `update-rates` — обновить курсы (CoinGecko + ExchangeRate-API).
 - `get-rate --from BTC --to USD` — курс валюты (кэш + автообновление при просрочке TTL).
-- `rates` / `show-rates` — вывести все пары из локального кэша.
+- `rates` / `show-rates [--currency CODE] [--top N] [--base USD]` — вывести пары из локального кэша с фильтрами.
 - `buy --currency BTC --amount 0.05` — покупка валюты (amount в штуках, списание USD по курсу).
 - `sell --currency BTC --amount 0.01` — продажа валюты, зачисление USD.
 - `show-portfolio --base USD` — показать кошельки и стоимость в базовой валюте.

@@ -92,7 +92,10 @@ class CoinGeckoClient(BaseApiClient):
     def fetch_rates(self) -> dict[str, Any]:
         """Возвращает словарь код -> {usd: rate}."""
         coin_ids = ",".join(CRYPTO_ID_MAP.values())
-        url = f"{self.base_url}/simple/price"
+        # база может быть уже с /simple/price, поэтому аккуратно
+        url = self.base_url
+        if "simple/price" not in url:
+            url = url.rstrip("/") + "/simple/price"
         params = {"ids": coin_ids, "vs_currencies": "usd"}
 
         data = self._make_request(url, params)

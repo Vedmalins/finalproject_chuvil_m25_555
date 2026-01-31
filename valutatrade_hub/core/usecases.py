@@ -117,8 +117,10 @@ def buy(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
         raise InsufficientFundsError(available=usd_wallet.balance, required=cost_usd, code="USD")
 
     target_wallet = portfolio.get_or_create_wallet(code)
+    before = target_wallet.balance
     usd_wallet.withdraw(cost_usd)
     target_wallet.deposit(amount)
+    after = target_wallet.balance
 
     db.save_portfolio(portfolio.to_dict())
     # rates already in storage; no extra save
@@ -129,6 +131,8 @@ def buy(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
         "amount": amount,
         "rate": rate,
         "usd_spent": cost_usd,
+        "before": before,
+        "after": after,
     }
 
 
@@ -151,14 +155,19 @@ def sell(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
     portfolio = Portfolio.from_dict(portfolio_data)
 
     wallet = portfolio.get_wallet(code)
-    if wallet is None or wallet.balance < amount:
-        available = wallet.balance if wallet else 0.0
-        raise InsufficientFundsError(available=available, required=amount, code=code)
+    if wallet is None:
+        raise ValidationError(
+            f"У вас нет кошелька '{code}'. Добавьте валюту: она создаётся автоматически при первой покупке."
+        )
+    if wallet.balance < amount:
+        raise InsufficientFundsError(available=wallet.balance, required=amount, code=code)
 
     usd_wallet = portfolio.get_or_create_wallet("USD")
+    before = wallet.balance
     wallet.withdraw(amount)
     revenue = amount * rate
     usd_wallet.deposit(revenue)
+    after = wallet.balance
 
     db.save_portfolio(portfolio.to_dict())
 
@@ -168,6 +177,8 @@ def sell(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
         "amount": amount,
         "rate": rate,
         "usd_received": revenue,
+        "before": before,
+        "after": after,
     }
 
 

@@ -47,8 +47,9 @@ class TradingCLI:
             "register": self._cmd_register,
             "login": self._cmd_login,
 
-            "rates": self._cmd_rates,
-            "show-rates": self._cmd_rates,
+            # курсы: расширенная версия с фильтрами
+            "rates": self._cmd_show_rates,
+            "show-rates": self._cmd_show_rates,
             "showrates": self._cmd_show_rates,
 
             "rate": self._cmd_rate,
@@ -159,7 +160,7 @@ class TradingCLI:
         print("  exit|quit     выход")
         print("  register --username <u> --password <p>   регистрация")
         print("  login --username <u> --password <p>      вход")
-        print("  rates|show-rates|showrates все курсы")
+        print("  rates|show-rates [--currency CODE] [--top N] [--base USD]   курсы из кеша")
         print("  get-rate --from <CODE> --to USD          курс валюты (алиас rate <CODE>)")
         print("  update|update-rates       обновить курсы\n")
 
@@ -380,8 +381,12 @@ class TradingCLI:
         table.align[f"В {base.upper()}"] = "r"
 
         total = 0.0
-        for code, amount in wallets.items():
-            value_base = self._convert_to_base(code, amount, base.upper(), rates)
+        for code, raw in wallets.items():
+            amount = raw.get("balance") if isinstance(raw, dict) else raw
+            if amount is None:
+                amount = 0.0
+            code = (raw.get("currency_code") if isinstance(raw, dict) else code).upper()
+            value_base = self._convert_to_base(code, float(amount), base.upper(), rates)
             total += value_base
             table.add_row([code, f"{amount:,.6f}", f"{value_base:,.2f}"])
 
@@ -401,7 +406,9 @@ class TradingCLI:
             res = buy(self.current_user["user_id"], code.upper(), qty)
             print(
                 f"Покупка выполнена: {qty:,.6f} {code.upper()} по курсу {res['rate']:,.4f} USD\n"
-                f"Оценочная стоимость: {res['usd_spent']:,.2f} USD"
+                f"Изменения в портфеле:\n"
+                f"- {code.upper()}: было {res.get('before', 0):,.4f} → стало {res.get('after', 0):,.4f}\n"
+                f"Оценочная стоимость покупки: {res['usd_spent']:,.2f} USD"
             )
         except ValueError:
             print("Ошибка: 'amount' должен быть числом")
@@ -409,6 +416,8 @@ class TradingCLI:
             print(f"Ошибка: {exc}")
         except StaleRatesError as exc:
             print(f"Ошибка: {exc}")
+        except ApiRequestError:
+            print(f"Ошибка: Не удалось получить курс для {code.upper()}→USD")
         except Exception as exc:
             self.logger.error(f"buy fail: {exc}")
             print(f"Ошибка: {exc}")
@@ -425,12 +434,16 @@ class TradingCLI:
             res = sell(self.current_user["user_id"], code.upper(), qty)
             print(
                 f"Продажа выполнена: {qty:,.6f} {code.upper()} по курсу {res['rate']:,.4f} USD\n"
-                f"Выручка: {res['usd_received']:,.2f} USD"
+                f"Изменения в портфеле:\n"
+                f"- {code.upper()}: было {res.get('before', 0):,.4f} → стало {res.get('after', 0):,.4f}\n"
+                f"Оценочная выручка: {res['usd_received']:,.2f} USD"
             )
         except ValueError:
             print("Ошибка: 'amount' должен быть числом")
         except (InvalidCurrencyError, InsufficientFundsError, ValidationError, CurrencyNotFoundError) as exc:
             print(f"Ошибка: {exc}")
+        except ApiRequestError:
+            print(f"Ошибка: Не удалось получить курс для {code.upper()}→USD")
         except StaleRatesError as exc:
             print(f"Ошибка: {exc}")
         except Exception as exc:

@@ -252,20 +252,38 @@ class Portfolio:  # pragma: no cover
         return self._wallets[code]
 
     def get_total_value(self, rates: dict[str, float], base: str = "USD") -> float:
+        """Считает суммарную стоимость портфеля в выбранной базовой валюте.
+
+        Пытаемся сначала найти прямой курс code->base, иначе конвертируем через USD
+        если есть оба курса code->USD и base->USD.
+        """
         total = 0.0
         base = base.upper()
         for code, wallet in self._wallets.items():
+            code = code.upper()
             if code == base:
                 total += wallet.balance
-            else:
-                pair = f"{code}_{base}"
-                if pair in rates:
-                    total += wallet.balance * rates[pair]
+                continue
+
+            pair_direct = f"{code}_{base}"
+            if pair_direct in rates:
+                total += wallet.balance * rates[pair_direct]
+                continue
+
+            pair_code_usd = f"{code}_USD"
+            pair_base_usd = f"{base}_USD"
+            if pair_code_usd in rates and pair_base_usd in rates and rates[pair_base_usd] != 0:
+                total += wallet.balance * rates[pair_code_usd] / rates[pair_base_usd]
         return total
 
     # свойства
     @property
     def user_id(self) -> int:
+        return self._user_id
+
+    @property
+    def user(self) -> int:
+        """Геттер для совместимости со спецификацией, возвращает идентификатор пользователя."""
         return self._user_id
 
     @property

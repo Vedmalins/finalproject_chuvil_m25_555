@@ -1,20 +1,40 @@
-{
-  "alina": {
-    "id": "7ba2382e-5569-4570-a021-055272477834",
+[
+  {
     "username": "alina",
-    "password_hash": "874296771feca16ef3e44441c0c51ef74c4187e675d1b9ca25c168508183b38b",
-    "created_at": null
+    "created_at": null,
+    "user_id": "7ba2382e-5569-4570-a021-055272477834",
+    "hashed_password": "874296771feca16ef3e44441c0c51ef74c4187e675d1b9ca25c168508183b38b",
+    "salt": "",
+    "registration_date": "2026-01-31T23:26:31.954485"
   },
-  "sasha": {
-    "id": "5e9ac25c-0585-446f-869b-f8f3c3a93122",
+  {
     "username": "sasha",
-    "password_hash": "297581d6cd198a6e6df740f13288cb13a1e76cebe3f0ebc3fe259977addfd646",
-    "created_at": null
+    "created_at": null,
+    "user_id": "5e9ac25c-0585-446f-869b-f8f3c3a93122",
+    "hashed_password": "297581d6cd198a6e6df740f13288cb13a1e76cebe3f0ebc3fe259977addfd646",
+    "salt": "",
+    "registration_date": "2026-01-31T23:26:31.954485"
   },
-  "alica": {
-    "id": "958b6ab8-ec25-4c34-aa68-0e61d1a3e7ce",
+  {
     "username": "alica",
-    "password_hash": "461fac36809ceb0603fc4d841c6ccebccbeae1d011c915f7cc2b8cebba9e534f",
-    "created_at": null
+    "created_at": null,
+    "user_id": "958b6ab8-ec25-4c34-aa68-0e61d1a3e7ce",
+    "hashed_password": "461fac36809ceb0603fc4d841c6ccebccbeae1d011c915f7cc2b8cebba9e534f",
+    "salt": "",
+    "registration_date": "2026-01-31T23:26:31.954485"
+  },
+  {
+    "user_id": 1,
+    "username": "cli_tester",
+    "hashed_password": "2782a54a7f76b62f293dfa135c7d41a0e5a9203ff211ad3d887f879833e04d19",
+    "salt": "f5e1c93ab6c50e4a97d1e1129b616493",
+    "registration_date": "2026-01-31T23:18:47.813564"
+  },
+  {
+    "user_id": 2,
+    "username": "cli_tester2",
+    "hashed_password": "8b739967c02a4367d01769f6455d03c45e9185fe49bf5d49fc27b3dc7c074b9e",
+    "salt": "d327b17ec52a0d25eae9aaed96bb0737",
+    "registration_date": "2026-01-31T23:23:24.525827"
   }
-}
+]
