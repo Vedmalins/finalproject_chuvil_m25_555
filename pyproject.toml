@@ -13,6 +13,7 @@ project = "main:main"
 python = "^3.10"
 prettytable = "^3.9.0"
 requests = "^2.31.0"
+tomli = { version = "^2.0.1", python = "<3.11" }
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.6"

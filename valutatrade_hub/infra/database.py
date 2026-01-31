@@ -25,122 +25,147 @@ class DatabaseManager:
             cls._instance._init_files()
         return cls._instance
 
+    # --- базовые IO ---
     def _init_files(self) -> None:
         """Создает пустые json если их нет."""
-        defaults = {
-            "users.json": {},
-            "portfolios.json": {},
-            "rates.json": {},
+        defaults: dict[str, Any] = {
+            "users.json": [],
+            "portfolios.json": [],
+            "rates.json": {"pairs": {}, "last_refresh": None},
+            "exchange_rates.json": [],
         }
         for name, content in defaults.items():
             path = self._data_dir / name
             if not path.exists():
                 self._write_json(path, content)
 
-    def _read_json(self, path: Path) -> dict[str, Any]:
-        """Чтение json, при ошибке отдает пустой словарь."""
+    @staticmethod
+    def _read_json(path: Path) -> Any:
+        """Чтение json, при ошибке отдает пустую структуру по умолчанию."""
         try:
             with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
+            if path.stem in ("users", "portfolios", "exchange_rates"):
+                return []
             return {}
 
-    def _write_json(self, path: Path, data: dict[str, Any]) -> None:
+    @staticmethod
+    def _write_json(path: Path, data: Any) -> None:
         """Запись json через временный файл чтобы не потерять данные."""
         temp = path.with_suffix(".tmp")
         with open(temp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(temp, path)
 
-    # работа с пользователями
-    def get_user(self, username: str) -> dict[str, Any] | None:
-        users = self._read_json(self._data_dir / "users.json")
-        return users.get(username)
+    # --- пользователи ---
+    def _load_users(self) -> list[dict[str, Any]]:
+        raw = self._read_json(self._data_dir / "users.json")
+        if isinstance(raw, dict):
+            return list(raw.values())
+        return raw or []
 
-    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
-        users = self._read_json(self._data_dir / "users.json")
-        for _name, data in users.items():
-            if data.get("id") == user_id:
-                return data
-        return None
-
-    def save_user(self, username: str, user_data: dict[str, Any]) -> None:
-        users = self._read_json(self._data_dir / "users.json")
-        users[username] = user_data
+    def _save_users(self, users: list[dict[str, Any]]) -> None:
         self._write_json(self._data_dir / "users.json", users)
 
     def user_exists(self, username: str) -> bool:
         return self.get_user(username) is not None
 
-    # работа с портфелями
-    def get_portfolio(self, user_id: str) -> dict[str, Any] | None:
-        portfolios = self._read_json(self._data_dir / "portfolios.json")
-        return portfolios.get(user_id)
+    def get_user(self, username: str) -> dict[str, Any] | None:
+        for user in self._load_users():
+            if user.get("username") == username:
+                return user
+        return None
 
-    def save_portfolio(self, user_id: str, portfolio_data: dict[str, Any]) -> None:
-        portfolios = self._read_json(self._data_dir / "portfolios.json")
-        portfolios[user_id] = portfolio_data
+    def get_user_by_id(self, user_id: int) -> dict[str, Any] | None:
+        for user in self._load_users():
+            if user.get("user_id") == user_id:
+                return user
+        return None
+
+    def next_user_id(self) -> int:
+        users = self._load_users()
+        ids = [u.get("user_id") for u in users if isinstance(u.get("user_id"), int)]
+        if not ids:
+            return 1
+        return max(ids) + 1
+
+    def save_user(self, user_data: dict[str, Any]) -> None:
+        users = self._load_users()
+        # обновление если username уже есть
+        updated = False
+        for idx, user in enumerate(users):
+            if user.get("username") == user_data.get("username"):
+                users[idx] = user_data
+                updated = True
+                break
+        if not updated:
+            users.append(user_data)
+        self._save_users(users)
+
+    # --- портфели ---
+    def _load_portfolios(self) -> list[dict[str, Any]]:
+        raw = self._read_json(self._data_dir / "portfolios.json")
+        if isinstance(raw, dict):
+            return list(raw.values())
+        return raw or []
+
+    def _save_portfolios(self, portfolios: list[dict[str, Any]]) -> None:
         self._write_json(self._data_dir / "portfolios.json", portfolios)
 
-    # работа с курсами
+    def get_portfolio(self, user_id: int) -> dict[str, Any] | None:
+        for pf in self._load_portfolios():
+            if pf.get("user_id") == user_id:
+                return pf
+        return None
+
+    def save_portfolio(self, portfolio_data: dict[str, Any]) -> None:
+        portfolios = self._load_portfolios()
+        updated = False
+        for idx, pf in enumerate(portfolios):
+            if pf.get("user_id") == portfolio_data.get("user_id"):
+                portfolios[idx] = portfolio_data
+                updated = True
+                break
+        if not updated:
+            portfolios.append(portfolio_data)
+        self._save_portfolios(portfolios)
+
+    # --- кэш курсов ---
     def get_rates_cache(self) -> dict[str, Any]:
         """Текущее объединённое состояние курсов."""
-        return self._read_json(self._data_dir / "rates.json")
+        data = self._read_json(self._data_dir / "rates.json")
+        return data if isinstance(data, dict) else {"pairs": {}, "last_refresh": None}
 
     def save_rates_cache(self, cache: dict[str, Any]) -> None:
         """Сохраняет объединённый кэш курсов."""
         self._write_json(self._data_dir / "rates.json", cache)
 
-    # обратная совместимость: собираем данные из кэша
-    def get_crypto_rates(self) -> dict[str, Any]:
-        cache = self.get_rates_cache()
-        pairs = cache.get("pairs", {})
-        crypto: dict[str, Any] = {"_meta": {"updated_at": cache.get("last_refresh")}}
-        for pair, payload in pairs.items():
-            if pair.endswith("_USD"):
-                code = pair.split("_")[0]
-                crypto[code] = {"usd": payload.get("rate")}
-        return crypto
+    # --- история курсов ---
+    def append_history_record(self, record: dict[str, Any]) -> None:
+        """Добавляет запись в exchange_rates.json (история)."""
+        history_path = self._data_dir / "exchange_rates.json"
+        history = self._read_json(history_path)
+        if not isinstance(history, list):
+            history = []
+        history.append(record)
+        self._write_json(history_path, history)
 
-    def save_crypto_rates(self, rates: dict[str, Any]) -> None:
-        # оставлено для совместимости тестов — направляем в save_rates_cache
-        cache = self.get_rates_cache()
-        cache.update(rates)
-        self.save_rates_cache(cache)
-
-    def get_fiat_rates(self) -> dict[str, Any]:
-        cache = self.get_rates_cache()
-        pairs = cache.get("pairs", {})
-        fiat_rates: dict[str, Any] = {"rates": {}, "_meta": {"updated_at": cache.get("last_refresh")}}
-        for pair, payload in pairs.items():
-            if pair.endswith("_USD"):
-                continue
-            try:
-                code, base = pair.split("_", 1)
-            except ValueError:
-                continue
-            if base == "USD":
-                # в кэше храним rate как from->base, а здесь нужно USD->code
-                rate = payload.get("rate")
-                if rate and rate != 0:
-                    fiat_rates["rates"][code] = 1 / rate
-        return fiat_rates
-
-    def save_fiat_rates(self, rates: dict[str, Any]) -> None:
-        cache = self.get_rates_cache()
-        cache.update(rates)
-        self.save_rates_cache(cache)
-
+    # --- утилиты ставок (обратная совместимость) ---
     def get_rate(self, currency_code: str) -> float | None:
-        code = currency_code.upper()
-        crypto = self.get_crypto_rates()
-        if code in crypto:
-            return crypto[code].get("usd")
-
-        fiat = self.get_fiat_rates()
-        if "rates" in fiat and code in fiat["rates"]:
-            rate = fiat["rates"][code]
-            if rate and rate != 0:
+        """Получает курс code->USD если есть в кэше."""
+        cache = self.get_rates_cache()
+        pairs = cache.get("pairs", {})
+        key = f"{currency_code.upper()}_USD"
+        entry = pairs.get(key)
+        if entry:
+            return entry.get("rate")
+        # попробовать обратный ключ USD_CODE
+        reverse = f"USD_{currency_code.upper()}"
+        entry = pairs.get(reverse)
+        if entry and entry.get("rate"):
+            rate = entry.get("rate")
+            if rate:
                 return 1 / rate
         return None
 

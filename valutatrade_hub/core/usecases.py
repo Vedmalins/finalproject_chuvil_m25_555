@@ -5,19 +5,23 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from valutatrade_hub.core.currencies import CurrencyRegistry
 from valutatrade_hub.core.exceptions import (
+    ApiRequestError,
     AuthenticationError,
-    InvalidCurrencyError,
+    CurrencyNotFoundError,
+    InsufficientFundsError,
     StaleRatesError,
     UserAlreadyExistsError,
     UserNotFoundError,
     ValidationError,
 )
-from valutatrade_hub.core.utils import generate_user_id, hash_password, verify_password
+from valutatrade_hub.core.models import Portfolio, User
 from valutatrade_hub.decorators import log_action
 from valutatrade_hub.infra.database import get_database
 from valutatrade_hub.infra.settings import get_settings
 from valutatrade_hub.parser_service.storage import get_storage
+from valutatrade_hub.parser_service.updater import run_once
 
 
 @log_action("REGISTER")
@@ -35,18 +39,14 @@ def register(username: str, password: str) -> dict[str, Any]:
     if db.user_exists(username):
         raise UserAlreadyExistsError(username)
 
-    user_id = generate_user_id()
-    user_data = {
-        "id": user_id,
-        "username": username,
-        "password_hash": hash_password(password),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
+    user_id = db.next_user_id()
+    new_user = User.create_new(user_id=user_id, username=username, password=password)
 
-    db.save_user(username, user_data)
+    db.save_user(new_user.to_dict())
 
-    portfolio_data = {"user_id": user_id, "wallets": {"USD": 10000.0}}
-    db.save_portfolio(user_id, portfolio_data)
+    # пустой портфель
+    portfolio = Portfolio(user_id=user_id)
+    db.save_portfolio(portfolio.to_dict())
 
     return {"success": True, "user_id": user_id, "username": username}
 
@@ -60,120 +60,143 @@ def login(username: str, password: str) -> dict[str, Any]:
     if not user_data:
         raise UserNotFoundError(username)
 
-    stored_hash = user_data.get("password_hash", "")
-    if not verify_password(password, stored_hash):
+    user = User.from_dict(user_data)
+    if not user.verify_password(password):
         raise AuthenticationError("Неверный пароль")
 
-    return {"success": True, "user_id": user_data["id"], "username": username}
+    return {"success": True, "user_id": user.user_id, "username": user.username}
 
 
-def show_portfolio(user_id: str) -> dict[str, Any]:
-    """Возвращает портфель, при отсутствии создает пустой."""
+def show_portfolio(user_id: int, base: str = "USD") -> dict[str, Any]:
+    """Возвращает портфель и его стоимость в базовой валюте."""
+    db = get_database()
+    storage = get_storage()
+
+    portfolio_data = db.get_portfolio(user_id)
+    if not portfolio_data:
+        portfolio_data = Portfolio(user_id=user_id).to_dict()
+        db.save_portfolio(portfolio_data)
+
+    portfolio = Portfolio.from_dict(portfolio_data)
+    base_currency = base.upper()
+
+    rates = storage.get_all_rates()
+    total_value = portfolio.get_total_value(rates=rates, base=base_currency)
+
+    return {
+        "success": True,
+        "portfolio": portfolio.to_dict(),
+        "base": base_currency,
+        "total_value": total_value,
+    }
+
+
+@log_action("BUY")
+def buy(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
+    """Покупка валюты за USD (amount — количество валюты)."""
+    if amount <= 0:
+        raise ValidationError("'amount' должен быть положительным числом")
+
+    code = CurrencyRegistry.get_currency(currency_code).code  # валидирует
+
+    rate_info = get_rate(code)
+    rate = rate_info["rate"]
+
     db = get_database()
 
     portfolio_data = db.get_portfolio(user_id)
     if not portfolio_data:
-        portfolio_data = {"user_id": user_id, "wallets": {}}
-        db.save_portfolio(user_id, portfolio_data)
+        portfolio_data = Portfolio(user_id=user_id).to_dict()
+    portfolio = Portfolio.from_dict(portfolio_data)
 
-    return {"success": True, "portfolio": portfolio_data}
+    usd_wallet = portfolio.get_or_create_wallet("USD")
+    cost_usd = amount * rate
+    if usd_wallet.balance < cost_usd:
+        raise InsufficientFundsError(available=usd_wallet.balance, required=cost_usd, code="USD")
 
+    target_wallet = portfolio.get_or_create_wallet(code)
+    usd_wallet.withdraw(cost_usd)
+    target_wallet.deposit(amount)
 
-@log_action("BUY")
-def buy(user_id: str, currency_code: str, usd_amount: float) -> dict[str, Any]:
-    """Покупка валюты за USD по текущему курсу."""
-    db = get_database()
-
-    if usd_amount <= 0:
-        raise ValidationError("Сумма должна быть больше 0")
-
-    currency_code = currency_code.upper()
-    rate = db.get_rate(currency_code)
-    if not rate:
-        raise InvalidCurrencyError(currency_code)
-
-    amount = usd_amount / rate
-
-    portfolio_data = db.get_portfolio(user_id) or {"user_id": user_id, "wallets": {}}
-    wallets = portfolio_data.get("wallets", {})
-
-    usd_balance = wallets.get("USD", 0)
-    if usd_balance < usd_amount:
-        raise ValidationError(f"Недостаточно USD: есть {usd_balance}, нужно {usd_amount}")
-
-    wallets["USD"] = usd_balance - usd_amount
-    wallets[currency_code] = wallets.get(currency_code, 0) + amount
-
-    portfolio_data["wallets"] = wallets
-    db.save_portfolio(user_id, portfolio_data)
+    db.save_portfolio(portfolio.to_dict())
+    # rates already in storage; no extra save
 
     return {
         "success": True,
-        "currency_code": currency_code,
+        "currency_code": code,
         "amount": amount,
         "rate": rate,
-        "usd_spent": usd_amount,
+        "usd_spent": cost_usd,
     }
 
 
 @log_action("SELL")
-def sell(user_id: str, currency_code: str, amount: float) -> dict[str, Any]:
-    """Продажа валюты за USD."""
-    db = get_database()
-
+def sell(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
+    """Продажа валюты за USD (amount — количество валюты)."""
     if amount <= 0:
-        raise ValidationError("Количество должно быть больше 0")
+        raise ValidationError("'amount' должен быть положительным числом")
 
-    currency_code = currency_code.upper()
-    rate = db.get_rate(currency_code)
-    if not rate:
-        raise InvalidCurrencyError(currency_code)
+    code = CurrencyRegistry.get_currency(currency_code).code
+
+    rate_info = get_rate(code)
+    rate = rate_info["rate"]
+
+    db = get_database()
 
     portfolio_data = db.get_portfolio(user_id)
     if not portfolio_data:
         raise ValidationError("Портфель не найден")
+    portfolio = Portfolio.from_dict(portfolio_data)
 
-    wallets = portfolio_data.get("wallets", {})
-    current = wallets.get(currency_code, 0)
-    if current < amount:
-        raise ValidationError(
-            f"Недостаточно {currency_code}: есть {current}, нужно {amount}"
-        )
+    wallet = portfolio.get_wallet(code)
+    if wallet is None or wallet.balance < amount:
+        available = wallet.balance if wallet else 0.0
+        raise InsufficientFundsError(available=available, required=amount, code=code)
 
-    usd_received = amount * rate
-    wallets[currency_code] = current - amount
-    wallets["USD"] = wallets.get("USD", 0) + usd_received
+    usd_wallet = portfolio.get_or_create_wallet("USD")
+    wallet.withdraw(amount)
+    revenue = amount * rate
+    usd_wallet.deposit(revenue)
 
-    portfolio_data["wallets"] = wallets
-    db.save_portfolio(user_id, portfolio_data)
+    db.save_portfolio(portfolio.to_dict())
 
     return {
         "success": True,
-        "currency_code": currency_code,
+        "currency_code": code,
         "amount": amount,
         "rate": rate,
-        "usd_received": usd_received,
+        "usd_received": revenue,
     }
 
 
-def get_rate(currency_code: str) -> dict[str, Any]:
-    """Возвращает курс валюты к USD или кидает ошибку."""
-    from valutatrade_hub.parser_service.storage import get_storage
+def get_rate(from_code: str, to_code: str = "USD") -> dict[str, Any]:
+    """Возвращает курс from->to (поддерживаем to=USD согласно ТЗ)."""
+    from_cur = CurrencyRegistry.get_currency(from_code)
+    to_code = to_code.upper()
+    if to_code != "USD":
+        raise ValidationError(f"Неизвестная базовая валюта '{to_code}'")
 
     settings = get_settings()
-    ttl = settings.get("rates_ttl_seconds", 300)
-
+    ttl = settings.rates_ttl
     storage = get_storage()
-    rate, updated_at = storage.get_rate_with_timestamp(currency_code)
+
+    rate, updated_at = storage.get_rate_with_timestamp(from_cur.code)
+
+    if rate is None or _is_stale(updated_at, ttl):
+        # пробуем обновить кэш
+        try:
+            run_once()
+            rate, updated_at = storage.get_rate_with_timestamp(from_cur.code)
+        except Exception as exc:
+            raise ApiRequestError(str(exc)) from exc
 
     if rate is None:
-        raise InvalidCurrencyError(currency_code.upper())
-
+        raise CurrencyNotFoundError(from_cur.code)
     if _is_stale(updated_at, ttl):
-        raise StaleRatesError(f"{currency_code.upper()}->USD", updated_at)
+        raise StaleRatesError(f"{from_cur.code}->{to_code}", updated_at)
 
     return {
-        "currency_code": currency_code.upper(),
+        "currency_code": from_cur.code,
         "rate": rate,
         "updated_at": updated_at,
     }
@@ -193,7 +216,5 @@ def _is_stale(updated_at: str | None, ttl_seconds: int) -> bool:
 
 def get_all_rates() -> dict[str, float]:
     """Берёт все курсы из хранилища парсера."""
-    from valutatrade_hub.parser_service.storage import get_storage
-
     storage = get_storage()
     return storage.get_all_rates()

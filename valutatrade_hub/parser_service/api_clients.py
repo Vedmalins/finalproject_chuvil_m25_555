@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any
-from typing import Optional
 
 import requests
 from requests import Response
@@ -14,9 +13,8 @@ from valutatrade_hub.parser_service.config import (
     BASE_FIAT_CURRENCY,
     COINGECKO_API_URL,
     CRYPTO_ID_MAP,
-    EXCHANGERATE_API_URL,
     EXCHANGERATE_API_KEY,
-    FIAT_CURRENCIES,
+    EXCHANGERATE_API_URL,
     REQUEST_TIMEOUT,
 )
 
@@ -108,7 +106,7 @@ class ExchangeRateClient(BaseApiClient):
     def fetch_rates(self) -> dict[str, Any]:
         """USD база, фильтруем только нужные валюты."""
         if not self.api_key:
-            self.logger.error("EXCHANGERATE_API_KEY не задан, запросы к ExchangeRate отключены")
+            self.logger.warning("EXCHANGERATE_API_KEY не задан, запросы к ExchangeRate отключены")
             return {}
 
         url = f"{self.base_url}/{self.api_key}/latest/{BASE_FIAT_CURRENCY}"
@@ -119,8 +117,6 @@ class ExchangeRateClient(BaseApiClient):
             return {}
 
         conversion_rates = data["conversion_rates"]
-        # If FIAT_CURRENCIES is defined, we previously filtered.
-        # Requirement now: persist all rates returned by API.
         filtered = conversion_rates
         base_code = data.get("base_code") or BASE_FIAT_CURRENCY
         result = {"base": base_code, "rates": filtered}
@@ -133,8 +129,8 @@ def create_crypto_client() -> CoinGeckoClient:
     return CoinGeckoClient()
 
 
-def create_fiat_client() -> Optional[BaseApiClient]:
+def create_fiat_client() -> BaseApiClient | None:
+    """Фабрика клиента для фиатных валют. Если ключа нет — фиат пропускаем."""
     if not EXCHANGERATE_API_KEY:
         return None
-    return ExchangeRateApiClient()
-
+    return ExchangeRateClient()

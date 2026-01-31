@@ -48,20 +48,14 @@ class RatesStorage:
         return self.get_fiat_rate(code)
 
     def get_all_rates(self) -> dict[str, float]:
-        """Все курсы к USD, без метаданных."""
+        """Все пары в формате CODE_BASE -> rate."""
         cache = self.db.get_rates_cache()
         pairs = cache.get("pairs", {})
         result: dict[str, float] = {}
         for pair, data in pairs.items():
-            try:
-                code, base = pair.split("_", 1)
-            except ValueError:
-                continue
-            if base != "USD":
-                continue
             rate = data.get("rate")
             if rate:
-                result[code] = rate
+                result[pair] = rate
         return result
 
     def get_rate_with_timestamp(self, code: str) -> tuple[float | None, str | None]:

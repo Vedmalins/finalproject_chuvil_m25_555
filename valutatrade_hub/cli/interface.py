@@ -28,8 +28,6 @@ from valutatrade_hub.core.usecases import (
 )
 from valutatrade_hub.logging_config import get_logger, setup_logging
 from valutatrade_hub.parser_service.updater import run_once
-from valutatrade_hub.parser_service.updater import RatesUpdater
-from valutatrade_hub.core.exceptions import ApiRequestError
 
 
 class TradingCLI:
@@ -120,24 +118,53 @@ class TradingCLI:
         else:
             print("Команда не найдена, help поможет")
 
-    # команды общие 
+    @staticmethod
+    def _get_flag(args: list[str], flag: str) -> str | None:
+        """Достает значение флага из списка аргументов."""
+        if flag in args:
+            idx = args.index(flag)
+            if idx + 1 < len(args):
+                return args[idx + 1]
+        for item in args:
+            if item.startswith(flag + "="):
+                return item.split("=", 1)[1]
+        return None
+
+    @staticmethod
+    def _convert_to_base(code: str, amount: float, base: str, rates: dict[str, float]) -> float:
+        """Переводит amount к базовой валюте используя пары из кэша."""
+        code = code.upper()
+        base = base.upper()
+        if code == base:
+            return amount
+        pair_direct = f"{code}_{base}"
+        if pair_direct in rates:
+            return amount * rates[pair_direct]
+        pair_code_usd = f"{code}_USD"
+        pair_base_usd = f"{base}_USD"
+        if pair_code_usd in rates and pair_base_usd in rates and rates[pair_base_usd] != 0:
+            # amount * (code->USD) / (base->USD)
+            return amount * rates[pair_code_usd] / rates[pair_base_usd]
+        return 0.0
+
+    # команды общие
 
     def _cmd_help(self, args: list[str]) -> None:
         """Печатает список команд."""
         print("\nОбщие команды:")
         print("  help          показать подсказку")
         print("  exit|quit     выход")
-        print("  register      регистрация")
-        print("  login         вход")
+        print("  register --username <u> --password <p>   регистрация")
+        print("  login --username <u> --password <p>      вход")
         print("  rates|show-rates          все курсы")
-        print("  rate <код>|get-rate ...   курс валюты (алиас под ТЗ)")
+        print("  get-rate --from <CODE> --to USD          курс валюты (алиас rate <CODE>)")
         print("  update|update-rates       обновить курсы\n")
 
         if self.current_user:
             print("Команды после входа:")
-            print("  portfolio|show-portfolio  показать кошельки")
-            print("  buy <код> <USD>   купить за USD")
-            print("  sell <код> <amt>  продать валюту")
+            print("  portfolio|show-portfolio [--base USD]   показать кошельки")
+            print("  buy --currency <код> --amount <qty>     купить валюту")
+            print("  sell --currency <код> --amount <qty>    продать валюту")
             print("  logout        выйти из аккаунта\n")
 
     def _cmd_exit(self, args: list[str] | None = None) -> None:
@@ -147,15 +174,25 @@ class TradingCLI:
 
     def _cmd_register(self, args: list[str]) -> None:
         """Регистрация нового пользователя."""
-        try:
+        username = self._get_flag(args, "--username")
+        password = self._get_flag(args, "--password")
+
+        # фолбэк на интерактив
+        if not username:
             username = input("Имя: ").strip()
-            password = getpass.getpass("Пароль: ")
-            confirm = getpass.getpass("Повтор: ")
-            if password != confirm:
+        if not password:
+            pwd1 = getpass.getpass("Пароль: ")
+            pwd2 = getpass.getpass("Повтор: ")
+            if pwd1 != pwd2:
                 print("Пароли разные")
                 return
+            password = pwd1
+        try:
             result = register(username, password)
-            print(f"Готово, ваш id: {result['user_id']}")
+            print(
+                f"Пользователь '{username}' зарегистрирован (id={result['user_id']}). "
+                f"Войдите: login --username {username} --password ****"
+            )
         except UserAlreadyExistsError as exc:
             print(f"Ошибка: {exc}")
         except ValidationError as exc:
@@ -166,12 +203,12 @@ class TradingCLI:
         if self.current_user:
             print("Уже вошли, сначала logout")
             return
+        username = self._get_flag(args, "--username") or input("Имя: ").strip()
+        password = self._get_flag(args, "--password") or getpass.getpass("Пароль: ")
         try:
-            username = input("Имя: ").strip()
-            password = getpass.getpass("Пароль: ")
             data = login(username, password)
             self.current_user = {"user_id": data["user_id"], "username": data["username"]}
-            print(f"Привет, {username}")
+            print(f"Вы вошли как '{username}'")
         except (AuthenticationError, UserNotFoundError) as exc:
             print(f"Ошибка: {exc}")
 
@@ -182,11 +219,11 @@ class TradingCLI:
             print("Курсы пустые, выполните update-rates")
             return
         table = PrettyTable()
-        table.field_names = ["Валюта", "Курс к USD"]
-        table.align["Валюта"] = "l"
-        table.align["Курс к USD"] = "r"
-        for code, rate in sorted(rates.items()):
-            table.add_row([code, f"{rate:,.4f}"])
+        table.field_names = ["Пара", "Курс"]
+        table.align["Пара"] = "l"
+        table.align["Курс"] = "r"
+        for pair, rate in sorted(rates.items()):
+            table.add_row([pair, f"{rate:,.6f}"])
         print(table)
 
     def _cmd_rate(self, args: list[str]) -> None:
@@ -200,46 +237,24 @@ class TradingCLI:
             print("usage: rate <CODE>  |  get-rate --from <FROM> --to <TO>")
             return
 
-        # (частично: поддерживаем только случаи, где --to USD)
-        if "--from" in args or "--to" in args:
-            try:
-                from_idx = args.index("--from") + 1
-                to_idx = args.index("--to") + 1
-                from_code = args[from_idx].upper()
-                to_code = args[to_idx].upper()
-            except ValueError:
-                print("usage: get-rate --from <FROM> --to <TO>")
-                return
-            except IndexError:
-                print("usage: get-rate --from <FROM> --to <TO>")
-                return
+        from_code = self._get_flag(args, "--from")
+        to_code = self._get_flag(args, "--to") or "USD"
 
-            # Сейчас usecase get_rate(<code>) возвращает курс только к USD.
-            # Поэтому поддерживаем только запросы вида XXX -> USD.
-            if to_code != "USD":
-                print(
-                    "Пока поддерживается курс только к USD.\n"
-                    "Пример: get-rate --from BTC --to USD\n"
-                    "Или используйте старый формат: rate BTC"
-                )
-                return
+        # старый формат rate <CODE>
+        if not from_code and len(args) == 1 and not args[0].startswith("--"):
+            from_code = args[0]
 
-            try:
-                res = get_rate(from_code)
-                print(
-                    f"Курс {from_code}→{to_code}: {res['rate']:,.4f} "
-                    f"(обновлено: {res.get('updated_at', 'n/a')})"
-                )
-            except (InvalidCurrencyError, StaleRatesError) as exc:
-                print(f"Ошибка: {exc}")
+        if not from_code:
+            print("usage: get-rate --from <FROM> --to <TO>")
             return
 
-        # старый формат rate <CODE> 
         try:
-            code = args[0].upper()
-            res = get_rate(code)
-            print(f"{code} = {res['rate']:,.4f} USD")
-        except (InvalidCurrencyError, StaleRatesError) as exc:
+            res = get_rate(from_code.upper(), to_code.upper())
+            print(
+                f"Курс {from_code.upper()}→{to_code.upper()}: {res['rate']:,.6f} "
+                f"(обновлено: {res.get('updated_at', 'n/a')})"
+            )
+        except (InvalidCurrencyError, StaleRatesError, ValidationError) as exc:
             print(f"Ошибка: {exc}")
 
 
@@ -267,7 +282,7 @@ class TradingCLI:
         print("Готово")
 
 
-    #  команды после логина 
+    # команды после логина
 
     def _cmd_logout(self, args: list[str]) -> None:
         """Выход из аккаунта."""
@@ -276,29 +291,45 @@ class TradingCLI:
 
     def _cmd_portfolio(self, args: list[str]) -> None:
         """Показывает баланс по валютам."""
-        result = show_portfolio(self.current_user["user_id"])
+        base = self._get_flag(args, "--base") or "USD"
+        result = show_portfolio(self.current_user["user_id"], base)
         wallets = result.get("portfolio", {}).get("wallets", {})
         if not wallets:
             print("Портфель пуст, купите что-нибудь")
             return
+
+        rates = get_all_rates()
         table = PrettyTable()
-        table.field_names = ["Валюта", "Количество"]
-        table.align["Валюта"] = "l"
-        table.align["Количество"] = "r"
+        table.field_names = [f"Валюта (база: {base.upper()})", "Баланс", f"В {base.upper()}"]
+        table.align[table.field_names[0]] = "l"
+        table.align["Баланс"] = "r"
+        table.align[f"В {base.upper()}"] = "r"
+
+        total = 0.0
         for code, amount in wallets.items():
-            table.add_row([code, f"{amount:,.6f}"])
+            value_base = self._convert_to_base(code, amount, base.upper(), rates)
+            total += value_base
+            table.add_row([code, f"{amount:,.6f}", f"{value_base:,.2f}"])
+
         print(table)
+        print("-" * 33)
+        print(f"ИТОГО: {total:,.2f} {base.upper()}")
 
     def _cmd_buy(self, args: list[str]) -> None:
         """Покупка за USD."""
-        if len(args) < 2:
-            print("usage: buy <код> <usd>")
+        code = self._get_flag(args, "--currency") or (args[0] if args else None)
+        amount_raw = self._get_flag(args, "--amount")
+        if not code or amount_raw is None:
+            print("usage: buy --currency <CODE> --amount <QTY>")
             return
         try:
-            usd_amount = float(args[1])
-            res = buy(self.current_user["user_id"], args[0].upper(), usd_amount)
-            print(f"Куплено {res['amount']:,.6f} {args[0].upper()} по {res['rate']:,.4f}")
-        except (InvalidCurrencyError, ValidationError) as exc:
+            qty = float(amount_raw)
+            res = buy(self.current_user["user_id"], code.upper(), qty)
+            print(
+                f"Покупка выполнена: {qty:,.6f} {code.upper()} по курсу {res['rate']:,.4f} USD\n"
+                f"Оценочная стоимость: {res['usd_spent']:,.2f} USD"
+            )
+        except (InvalidCurrencyError, ValidationError, InsufficientFundsError) as exc:
             print(f"Ошибка: {exc}")
         except StaleRatesError as exc:
             print(f"Ошибка: {exc}")
@@ -308,13 +339,18 @@ class TradingCLI:
 
     def _cmd_sell(self, args: list[str]) -> None:
         """Продажа валюты."""
-        if len(args) < 2:
-            print("usage: sell <код> <qty>")
+        code = self._get_flag(args, "--currency") or (args[0] if args else None)
+        amount_raw = self._get_flag(args, "--amount")
+        if not code or amount_raw is None:
+            print("usage: sell --currency <CODE> --amount <QTY>")
             return
         try:
-            qty = float(args[1])
-            res = sell(self.current_user["user_id"], args[0].upper(), qty)
-            print(f"Продано {qty:,.6f} {args[0].upper()} за {res['usd_received']:,.2f} USD")
+            qty = float(amount_raw)
+            res = sell(self.current_user["user_id"], code.upper(), qty)
+            print(
+                f"Продажа выполнена: {qty:,.6f} {code.upper()} по курсу {res['rate']:,.4f} USD\n"
+                f"Выручка: {res['usd_received']:,.2f} USD"
+            )
         except (InvalidCurrencyError, InsufficientFundsError, ValidationError) as exc:
             print(f"Ошибка: {exc}")
         except StaleRatesError as exc:

@@ -1,10 +1,10 @@
 """Обновление курсов: тянем из API и сохраняем."""
 
 from __future__ import annotations
+
 from typing import Any
 
 from valutatrade_hub.core.exceptions import ApiRequestError
-from valutatrade_hub.infra.settings import get_settings
 from valutatrade_hub.logging_config import get_logger
 from valutatrade_hub.parser_service.api_clients import (
     create_crypto_client,
@@ -56,7 +56,7 @@ class RatesUpdater:
         existing_cache = self.storage.db.get_rates_cache() or {}
         pairs: dict[str, dict[str, str | float]] = existing_cache.get("pairs", {}).copy()
 
-        # crypto --> pairs 
+        # crypto --> pairs
         if crypto:
             for code, data in crypto.items():
                 if str(code).startswith("_"):
@@ -64,11 +64,9 @@ class RatesUpdater:
                 rate = data.get("usd") if isinstance(data, dict) else None
                 if rate is None:
                     continue
-                pairs[f"{code}_USD"] = {
-                    "rate": float(rate),
-                    "updated_at": timestamp,
-                    "source": "CoinGecko",
-                }
+                pair_key = f"{code}_USD"
+                pairs[pair_key] = {"rate": float(rate), "updated_at": timestamp, "source": "CoinGecko"}
+                self._append_history_record(code, "USD", float(rate), timestamp, "CoinGecko")
         # fiat --> pairs
         if fiat and isinstance(fiat, dict) and "rates" in fiat:
             base = fiat.get("base", "USD")
@@ -81,7 +79,12 @@ class RatesUpdater:
                 else:
                     pair_rate = usd_to_code
                     pair_key = f"{code}_{base}"
-                pairs[pair_key] = {"rate": pair_rate, "updated_at": timestamp, "source": "ExchangeRate-API"}
+                pairs[pair_key] = {
+                    "rate": pair_rate,
+                    "updated_at": timestamp,
+                    "source": "ExchangeRate-API",
+                }
+                self._append_history_record(code, base, pair_rate, timestamp, "ExchangeRate-API")
 
         if pairs:
             cache = {"pairs": pairs, "last_refresh": timestamp}
@@ -103,6 +106,23 @@ class RatesUpdater:
         from datetime import datetime, timezone
 
         return datetime.now(timezone.utc).isoformat()
+
+    def _append_history_record(
+        self, from_code: str, to_code: str, rate: float, timestamp: str, source: str
+    ) -> None:
+        """Добавляет запись в history (exchange_rates.json)."""
+        record = {
+            "id": f"{from_code.upper()}_{to_code.upper()}_{timestamp}",
+            "from_currency": from_code.upper(),
+            "to_currency": to_code.upper(),
+            "rate": rate,
+            "timestamp": timestamp,
+            "source": source,
+        }
+        try:
+            self.storage.db.append_history_record(record)
+        except Exception as exc:
+            self.logger.warning(f"Не удалось записать историю курса {record['id']}: {exc}")
 
 
 def run_once() -> dict:

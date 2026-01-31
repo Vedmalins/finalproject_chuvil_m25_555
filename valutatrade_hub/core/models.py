@@ -62,11 +62,15 @@ class User:
             except ValueError:
                 reg_date = datetime.now()
 
+        user_id = data.get("user_id") or data.get("id")
+        hashed = data.get("hashed_password") or data.get("password_hash")
+        salt = data.get("salt") or data.get("salt", "")
+
         return cls(
-            user_id=data["user_id"],
+            user_id=user_id,
             username=data["username"],
-            hashed_password=data["hashed_password"],
-            salt=data["salt"],
+            hashed_password=hashed,
+            salt=salt,
             registration_date=reg_date,
         )
 
@@ -160,7 +164,7 @@ class Wallet:  # pragma: no cover
 
     # обратно в dict
     def to_dict(self) -> dict[str, Any]:
-        return {"balance": self._balance}
+        return {"currency_code": self.currency_code, "balance": self._balance}
 
     # операции
     def deposit(self, amount: float) -> None:
