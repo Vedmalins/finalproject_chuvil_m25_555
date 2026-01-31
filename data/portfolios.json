@@ -1,45 +1,10 @@
 [
   {
-    "user_id": "7ba2382e-5569-4570-a021-055272477834",
-    "wallets": {
-      "USD": {
-        "currency_code": "USD",
-        "balance": 10000.0
-      }
-    }
-  },
-  {
-    "user_id": "5e9ac25c-0585-446f-869b-f8f3c3a93122",
-    "wallets": {
-      "USD": {
-        "currency_code": "USD",
-        "balance": 10000.0
-      }
-    }
-  },
-  {
-    "user_id": "958b6ab8-ec25-4c34-aa68-0e61d1a3e7ce",
-    "wallets": {
-      "USD": {
-        "currency_code": "USD",
-        "balance": 10000.0
-      }
-    }
-  },
-  {
     "user_id": 1,
     "wallets": {
       "USD": {
         "currency_code": "USD",
-        "balance": 7858.400000000001
-      },
-      "BTC": {
-        "currency_code": "BTC",
-        "balance": 0.01
-      },
-      "ETH": {
-        "currency_code": "ETH",
-        "balance": 0.5
+        "balance": 10000.0
       }
     }
   },
@@ -49,6 +14,19 @@
       "USD": {
         "currency_code": "USD",
         "balance": 10000.0
+      }
+    }
+  },
+  {
+    "user_id": 3,
+    "wallets": {
+      "USD": {
+        "currency_code": "USD",
+        "balance": 9610.1
+      },
+      "BTC": {
+        "currency_code": "BTC",
+        "balance": 0.005
       }
     }
   }

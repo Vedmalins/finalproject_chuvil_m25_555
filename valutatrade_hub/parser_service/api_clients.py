@@ -16,6 +16,7 @@ from valutatrade_hub.parser_service.config import (
     CRYPTO_ID_MAP,
     EXCHANGERATE_API_KEY,
     EXCHANGERATE_API_URL,
+    FIAT_CURRENCIES,
     REQUEST_TIMEOUT,
 )
 
@@ -134,7 +135,8 @@ class ExchangeRateClient(BaseApiClient):
             return {}
 
         conversion_rates = data["conversion_rates"]
-        filtered = conversion_rates
+        # оставляем только те валюты, которые прописаны в конфиге FIAT_CURRENCIES
+        filtered = {code: rate for code, rate in conversion_rates.items() if code in FIAT_CURRENCIES}
         base_code = data.get("base_code") or BASE_FIAT_CURRENCY
         result = {"base": base_code, "rates": filtered}
         self.logger.info(f"Курсы фиата: {list(filtered.keys())}")

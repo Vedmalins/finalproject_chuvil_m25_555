@@ -10,6 +10,7 @@ from valutatrade_hub.parser_service.api_clients import (
     create_crypto_client,
     create_fiat_client,
 )
+from valutatrade_hub.parser_service.config import CRYPTO_ID_MAP, FIAT_CURRENCIES
 from valutatrade_hub.parser_service.storage import get_storage
 
 
@@ -59,6 +60,14 @@ class RatesUpdater:
         # 3) текущая логика обновления pairs + сохранение rates.json
         existing_cache = self.storage.db.get_rates_cache() or {}
         pairs: dict[str, dict[str, str | float]] = existing_cache.get("pairs", {}).copy()
+
+        # удаляем пары с неподдерживаемыми кодами, чтобы кеш не пух от старых данных
+        allowed_codes = set(FIAT_CURRENCIES) | set(CRYPTO_ID_MAP.keys()) | {"USD"}
+        pairs = {
+            pair: data
+            for pair, data in pairs.items()
+            if pair.split("_", 1)[0] in allowed_codes and pair.split("_", 1)[-1] in allowed_codes
+        }
 
         # crypto --> pairs
         if crypto:

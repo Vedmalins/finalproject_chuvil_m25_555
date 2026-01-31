@@ -8,6 +8,7 @@ from typing import Any
 
 from prettytable import PrettyTable
 
+from valutatrade_hub.core.currencies import CurrencyRegistry
 from valutatrade_hub.core.exceptions import (
     ApiRequestError,
     AuthenticationError,
@@ -321,6 +322,9 @@ class TradingCLI:
         if currency_filter:
             currency_filter = currency_filter.upper()
             rates = {k: v for k, v in rates.items() if k.startswith(f"{currency_filter}_")}
+            if not rates:
+                print(f"Курс для '{currency_filter}' не найден в кеше.")
+                return
 
         if base.upper() != "USD":
             # простая переконвертация через USD, если есть оба курса
@@ -339,6 +343,10 @@ class TradingCLI:
         if top_raw:
             try:
                 top_n = int(top_raw)
+                crypto_codes = {c.code for c in CurrencyRegistry.list_crypto_currencies()}
+                sorted_items = [
+                    item for item in sorted_items if item[0].split("_", 1)[0] in crypto_codes
+                ]
                 sorted_items = sorted(sorted_items, key=lambda kv: kv[1], reverse=True)[:top_n]
             except ValueError:
                 print("Флаг --top должен быть целым числом")
