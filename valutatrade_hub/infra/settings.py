@@ -23,7 +23,12 @@ DEFAULT_PYPROJECT_PATH = Path(__file__).parent.parent.parent / "pyproject.toml"
 
 
 class SettingsLoader:
-    """Singleton для конфигов, чтобы загрузка была один раз."""
+    """Singleton для конфигов, чтобы загрузка была один раз.
+
+    Выбран __new__ ради простоты и прозрачности; помогает избежать повторной загрузки
+    pyproject/config.json при каждом импорте. Если нужно обновить конфиг на лету,
+    используйте reload().
+    """
 
     _instance: SettingsLoader | None = None
     _settings: dict[str, Any] = {}
@@ -104,6 +109,13 @@ class SettingsLoader:
         cls._instance = None
         cls._settings = {}
         cls._config_path = None
+
+    @classmethod
+    def reload(cls, config_path: Path | None = None) -> None:
+        """Перечитать настройки из файла/pyproject."""
+        cls._instance = None
+        cls._config_path = config_path
+        cls._load_config()
 
 
 def get_settings(config_path: Path | None = None) -> SettingsLoader:

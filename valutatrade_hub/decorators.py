@@ -37,6 +37,14 @@ def log_action(action: str, verbose: bool = False) -> Callable[[F], F]:
                         log_data["rate"] = result["rate"]
                     if "currency_code" in result:
                         log_data["currency_code"] = result["currency_code"]
+                    if "usd_spent" in result:
+                        log_data["usd_spent"] = result["usd_spent"]
+                    if "usd_received" in result:
+                        log_data["usd_received"] = result["usd_received"]
+                    if "before" in result:
+                        log_data["before"] = result["before"]
+                    if "after" in result:
+                        log_data["after"] = result["after"]
 
                 log_data["result"] = "OK"
                 logger.info(_format_log_message(log_data))

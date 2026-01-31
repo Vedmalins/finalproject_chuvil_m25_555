@@ -72,13 +72,15 @@ def show_portfolio(user_id: int, base: str = "USD") -> dict[str, Any]:
     db = get_database()
     storage = get_storage()
 
+    # валидируем базовую валюту
+    base_currency = CurrencyRegistry.get_currency(base).code
+
     portfolio_data = db.get_portfolio(user_id)
     if not portfolio_data:
         portfolio_data = Portfolio(user_id=user_id).to_dict()
         db.save_portfolio(portfolio_data)
 
     portfolio = Portfolio.from_dict(portfolio_data)
-    base_currency = base.upper()
 
     rates = storage.get_all_rates()
     total_value = portfolio.get_total_value(rates=rates, base=base_currency)
@@ -170,33 +172,54 @@ def sell(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
 
 
 def get_rate(from_code: str, to_code: str = "USD") -> dict[str, Any]:
-    """Возвращает курс from->to (поддерживаем to=USD согласно ТЗ)."""
+    """Возвращает курс from->to, поддерживает любые коды из реестра."""
     from_cur = CurrencyRegistry.get_currency(from_code)
-    to_code = to_code.upper()
-    if to_code != "USD":
-        raise ValidationError(f"Неизвестная базовая валюта '{to_code}'")
+    to_cur = CurrencyRegistry.get_currency(to_code)
 
     settings = get_settings()
     ttl = settings.rates_ttl
     storage = get_storage()
 
-    rate, updated_at = storage.get_rate_with_timestamp(from_cur.code)
+    # пытаемся найти прямую пару FROM_TO
+    pair_direct = f"{from_cur.code}_{to_cur.code}"
+    pair_reverse = f"{to_cur.code}_{from_cur.code}"
+
+    rate = None
+    updated_at = None
+
+    cache = storage.db.get_rates_cache()
+    pairs = cache.get("pairs", {})
+    if pair_direct in pairs:
+        rate = pairs[pair_direct].get("rate")
+        updated_at = pairs[pair_direct].get("updated_at") or cache.get("last_refresh")
+    elif pair_reverse in pairs and pairs[pair_reverse].get("rate"):
+        rev_rate = pairs[pair_reverse]["rate"]
+        rate = 1 / rev_rate if rev_rate else None
+        updated_at = pairs[pair_reverse].get("updated_at") or cache.get("last_refresh")
 
     if rate is None or _is_stale(updated_at, ttl):
-        # пробуем обновить кэш
         try:
             run_once()
-            rate, updated_at = storage.get_rate_with_timestamp(from_cur.code)
+            cache = storage.db.get_rates_cache()
+            pairs = cache.get("pairs", {})
+            if pair_direct in pairs:
+                rate = pairs[pair_direct].get("rate")
+                updated_at = pairs[pair_direct].get("updated_at") or cache.get("last_refresh")
+            elif pair_reverse in pairs and pairs[pair_reverse].get("rate"):
+                rev_rate = pairs[pair_reverse]["rate"]
+                rate = 1 / rev_rate if rev_rate else None
+                updated_at = pairs[pair_reverse].get("updated_at") or cache.get("last_refresh")
         except Exception as exc:
             raise ApiRequestError(str(exc)) from exc
 
     if rate is None:
-        raise CurrencyNotFoundError(from_cur.code)
+        raise CurrencyNotFoundError(f"{from_cur.code}->{to_cur.code}")
     if _is_stale(updated_at, ttl):
-        raise StaleRatesError(f"{from_cur.code}->{to_code}", updated_at)
+        raise StaleRatesError(f"{from_cur.code}->{to_cur.code}", updated_at)
 
     return {
         "currency_code": from_cur.code,
+        "to_currency": to_cur.code,
         "rate": rate,
         "updated_at": updated_at,
     }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -23,21 +24,33 @@ def _load_env() -> None:
 
 _load_env()
 
-COINGECKO_API_URL = "https://api.coingecko.com/api/v3"
-EXCHANGERATE_API_URL = "https://v6.exchangerate-api.com/v6"
-EXCHANGERATE_API_KEY = os.getenv("EXCHANGERATE_API_KEY", "").strip()
 
-BASE_FIAT_CURRENCY = "USD"
+@dataclass(slots=True)
+class ParserConfig:
+    """Конфигурация Parser Service."""
 
-# криптовалюты: код -> id в coingecko (только нужные тикеры, без tether)
-CRYPTO_ID_MAP = {
-    "BTC": "bitcoin",
-    "ETH": "ethereum",
-    "SOL": "solana",
-}
+    EXCHANGERATE_API_KEY: str = os.getenv("EXCHANGERATE_API_KEY", "").strip()
+    COINGECKO_URL: str = "https://api.coingecko.com/api/v3/simple/price"
+    EXCHANGERATE_API_URL: str = "https://v6.exchangerate-api.com/v6"
+    BASE_CURRENCY: str = "USD"
+    FIAT_CURRENCIES: tuple[str, ...] = ("USD", "EUR", "RUB", "GBP")
+    CRYPTO_CURRENCIES: tuple[str, ...] = ("BTC", "ETH", "SOL")
+    CRYPTO_ID_MAP: dict[str, str] = field(
+        default_factory=lambda: {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"}
+    )
+    RATES_FILE_PATH: str = "data/rates.json"
+    HISTORY_FILE_PATH: str = "data/exchange_rates.json"
+    REQUEST_TIMEOUT: int = 10
+    UPDATE_INTERVAL: int = 60
 
-# фиат: просто список поддерживаемых
-FIAT_CURRENCIES = ["USD", "EUR", "RUB", "GBP"]
 
-UPDATE_INTERVAL = 60  # секунды между обновлениями
-REQUEST_TIMEOUT = 10
+# экспортируем константы для совместимости существующего кода
+CONFIG = ParserConfig()
+COINGECKO_API_URL = CONFIG.COINGECKO_URL
+EXCHANGERATE_API_URL = CONFIG.EXCHANGERATE_API_URL
+EXCHANGERATE_API_KEY = CONFIG.EXCHANGERATE_API_KEY
+BASE_FIAT_CURRENCY = CONFIG.BASE_CURRENCY
+CRYPTO_ID_MAP = CONFIG.CRYPTO_ID_MAP
+FIAT_CURRENCIES = list(CONFIG.FIAT_CURRENCIES)
+UPDATE_INTERVAL = CONFIG.UPDATE_INTERVAL
+REQUEST_TIMEOUT = CONFIG.REQUEST_TIMEOUT

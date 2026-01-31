@@ -9,7 +9,9 @@ from typing import Any
 from prettytable import PrettyTable
 
 from valutatrade_hub.core.exceptions import (
+    ApiRequestError,
     AuthenticationError,
+    CurrencyNotFoundError,
     InsufficientFundsError,
     InvalidCurrencyError,
     StaleRatesError,
@@ -47,6 +49,7 @@ class TradingCLI:
 
             "rates": self._cmd_rates,
             "show-rates": self._cmd_rates,
+            "showrates": self._cmd_show_rates,
 
             "rate": self._cmd_rate,
             "get-rate": self._cmd_rate,
@@ -156,7 +159,7 @@ class TradingCLI:
         print("  exit|quit     выход")
         print("  register --username <u> --password <p>   регистрация")
         print("  login --username <u> --password <p>      вход")
-        print("  rates|show-rates          все курсы")
+        print("  rates|show-rates|showrates все курсы")
         print("  get-rate --from <CODE> --to USD          курс валюты (алиас rate <CODE>)")
         print("  update|update-rates       обновить курсы\n")
 
@@ -218,6 +221,16 @@ class TradingCLI:
         if not rates:
             print("Курсы пустые, выполните update-rates")
             return
+        # попытка вывести last_refresh если есть в кэше
+        try:
+            from valutatrade_hub.infra.database import get_database
+
+            cache = get_database().get_rates_cache()
+            last_refresh = cache.get("last_refresh")
+            if last_refresh:
+                print(f"Rates from cache (updated at {last_refresh}):")
+        except Exception:
+            pass
         table = PrettyTable()
         table.field_names = ["Пара", "Курс"]
         table.align["Пара"] = "l"
@@ -250,20 +263,25 @@ class TradingCLI:
 
         try:
             res = get_rate(from_code.upper(), to_code.upper())
-            print(
-                f"Курс {from_code.upper()}→{to_code.upper()}: {res['rate']:,.6f} "
-                f"(обновлено: {res.get('updated_at', 'n/a')})"
-            )
-        except (InvalidCurrencyError, StaleRatesError, ValidationError) as exc:
+            rate = res["rate"]
+            updated_at = res.get("updated_at", "n/a")
+            print(f"Курс {from_code.upper()}→{to_code.upper()}: {rate:,.6f} (обновлено: {updated_at})")
+            if rate != 0:
+                print(f"Обратный курс {to_code.upper()}→{from_code.upper()}: {1/rate:,.6f}")
+        except (InvalidCurrencyError, StaleRatesError, ValidationError, CurrencyNotFoundError, ApiRequestError) as exc:
             print(f"Ошибка: {exc}")
 
 
     def _cmd_update(self, args: list[str]) -> None:
         """Тянет свежие курсы из сетки."""
         print("Обновляю курсы, секундочку...")
+        source = self._get_flag(args, "--source")
+        if source and source not in {"coingecko", "exchangerate"}:
+            print("Неизвестный источник. Используйте coingecko или exchangerate.")
+            return
 
         try:
-            result = run_once()  # теперь возвращает словарь
+            result = run_once(source=source)  # теперь возвращает словарь
         except Exception as exc:
             # если действительно фатальная,
             # её можно показать пользователю.
@@ -275,11 +293,63 @@ class TradingCLI:
         warnings = []
         if isinstance(result, dict):
             warnings = result.get("warnings", []) or []
+            updated_pairs = result.get("updated_pairs")
+            last_refresh = result.get("last_refresh")
 
         for w in warnings:
             print(f"NOTE: {w}")
 
+        if isinstance(result, dict):
+            summary = f"Обновлено пар: {updated_pairs}"
+            if last_refresh:
+                summary += f", last_refresh: {last_refresh}"
+            print(summary)
         print("Готово")
+
+    def _cmd_show_rates(self, args: list[str]) -> None:
+        """Показывает курсы из кеша с фильтрами."""
+        currency_filter = self._get_flag(args, "--currency")
+        top_raw = self._get_flag(args, "--top")
+        base = self._get_flag(args, "--base") or "USD"
+
+        rates = get_all_rates()
+        if not rates:
+            print("Локальный кеш курсов пуст. Выполните 'update-rates'.")
+            return
+
+        if currency_filter:
+            currency_filter = currency_filter.upper()
+            rates = {k: v for k, v in rates.items() if k.startswith(f"{currency_filter}_")}
+
+        if base.upper() != "USD":
+            # простая переконвертация через USD, если есть оба курса
+            converted: dict[str, float] = {}
+            for pair, rate in rates.items():
+                code, pair_base = pair.split("_", 1)
+                if pair_base != "USD":
+                    continue
+                base_pair = f"{base.upper()}_USD"
+                if base_pair in rates and rates[base_pair] != 0:
+                    converted[f"{code}_{base.upper()}"] = rate / rates[base_pair]
+            rates = converted or rates
+
+        # сортировка
+        sorted_items = sorted(rates.items(), key=lambda kv: kv[0])
+        if top_raw:
+            try:
+                top_n = int(top_raw)
+                sorted_items = sorted(sorted_items, key=lambda kv: kv[1], reverse=True)[:top_n]
+            except ValueError:
+                print("Флаг --top должен быть целым числом")
+                return
+
+        table = PrettyTable()
+        table.field_names = ["Пара", "Курс"]
+        table.align["Пара"] = "l"
+        table.align["Курс"] = "r"
+        for pair, rate in sorted_items:
+            table.add_row([pair, f"{rate:,.6f}"])
+        print(table)
 
 
     # команды после логина
@@ -292,7 +362,11 @@ class TradingCLI:
     def _cmd_portfolio(self, args: list[str]) -> None:
         """Показывает баланс по валютам."""
         base = self._get_flag(args, "--base") or "USD"
-        result = show_portfolio(self.current_user["user_id"], base)
+        try:
+            result = show_portfolio(self.current_user["user_id"], base)
+        except CurrencyNotFoundError as exc:
+            print(f"Ошибка: {exc}")
+            return
         wallets = result.get("portfolio", {}).get("wallets", {})
         if not wallets:
             print("Портфель пуст, купите что-нибудь")
@@ -329,7 +403,9 @@ class TradingCLI:
                 f"Покупка выполнена: {qty:,.6f} {code.upper()} по курсу {res['rate']:,.4f} USD\n"
                 f"Оценочная стоимость: {res['usd_spent']:,.2f} USD"
             )
-        except (InvalidCurrencyError, ValidationError, InsufficientFundsError) as exc:
+        except ValueError:
+            print("Ошибка: 'amount' должен быть числом")
+        except (InvalidCurrencyError, ValidationError, InsufficientFundsError, CurrencyNotFoundError) as exc:
             print(f"Ошибка: {exc}")
         except StaleRatesError as exc:
             print(f"Ошибка: {exc}")
@@ -351,7 +427,9 @@ class TradingCLI:
                 f"Продажа выполнена: {qty:,.6f} {code.upper()} по курсу {res['rate']:,.4f} USD\n"
                 f"Выручка: {res['usd_received']:,.2f} USD"
             )
-        except (InvalidCurrencyError, InsufficientFundsError, ValidationError) as exc:
+        except ValueError:
+            print("Ошибка: 'amount' должен быть числом")
+        except (InvalidCurrencyError, InsufficientFundsError, ValidationError, CurrencyNotFoundError) as exc:
             print(f"Ошибка: {exc}")
         except StaleRatesError as exc:
             print(f"Ошибка: {exc}")

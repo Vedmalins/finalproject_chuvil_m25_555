@@ -18,6 +18,7 @@ def setup_logging(
     log_file: Path | str | None = None,
     max_bytes: int = 5 * 1024 * 1024,
     backup_count: int = 3,
+    json_format: bool = False,
 ) -> logging.Logger:
     """Создает логгер: файл + консоль."""
     global _logger, _initialized
@@ -37,11 +38,16 @@ def setup_logging(
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
 
-    file_fmt = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
-    console_fmt = logging.Formatter(fmt="%(levelname)s: %(message)s")
+    if json_format:
+        fmt_str = '{"ts":"%(asctime)s","lvl":"%(levelname)s","logger":"%(name)s","msg":%(message)s}'
+        file_fmt = logging.Formatter(fmt=fmt_str, datefmt="%Y-%m-%dT%H:%M:%S")
+        console_fmt = logging.Formatter(fmt=fmt_str)
+    else:
+        file_fmt = logging.Formatter(
+            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S",
+        )
+        console_fmt = logging.Formatter(fmt="%(levelname)s: %(message)s")
 
     file_handler = RotatingFileHandler(
         filename=str(log_file), maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"

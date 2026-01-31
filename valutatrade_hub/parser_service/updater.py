@@ -22,35 +22,39 @@ class RatesUpdater:
         self.storage = get_storage()
         self.logger = get_logger("updater")
 
-    def update(self) -> dict[str, Any]:
-        """Один цикл обновления: crypto + fiat. Возвращает итог для CLI."""
+    def update(self, source: str | None = None) -> dict[str, Any]:
+        """Один цикл обновления: crypto + fiat. source: coingecko|exchangerate|None."""
         timestamp = self._utc_now_iso()
         warnings: list[str] = []
         updated_sources: dict[str, int] = {"coingecko": 0, "exchangerate": 0}
 
         # 1) КРИПТА
         crypto = {}
-        try:
-            crypto = self.crypto_client.fetch_rates() or {}
-            updated_sources["coingecko"] = len([k for k in crypto.keys() if not str(k).startswith("_")])
-        except ApiRequestError as e:
-            self.logger.warning(f"CoinGecko недоступен: {e}")
-            warnings.append(f"CoinGecko: {e}")
+        if source in (None, "", "coingecko"):
+            try:
+                crypto = self.crypto_client.fetch_rates() or {}
+                updated_sources["coingecko"] = len(
+                    [k for k in crypto.keys() if not str(k).startswith("_")]
+                )
+            except ApiRequestError as e:
+                self.logger.warning(f"CoinGecko недоступен: {e}")
+                warnings.append(f"CoinGecko: {e}")
 
         # 2) ФИАТ
         fiat = {}
-        if self.fiat_client is None:
-            msg = "EXCHANGERATE_API_KEY не задан — фиатные курсы пропущены"
-            self.logger.warning(msg)
-            warnings.append(msg)
-        else:
-            try:
-                fiat = self.fiat_client.fetch_rates() or {}
-                if isinstance(fiat, dict) and "rates" in fiat and isinstance(fiat["rates"], dict):
-                    updated_sources["exchangerate"] = len(fiat["rates"])
-            except ApiRequestError as e:
-                self.logger.warning(f"ExchangeRate-API недоступен: {e}")
-                warnings.append(f"ExchangeRate-API: {e}")
+        if source in (None, "", "exchangerate"):
+            if self.fiat_client is None:
+                msg = "EXCHANGERATE_API_KEY не задан — фиатные курсы пропущены"
+                self.logger.warning(msg)
+                warnings.append(msg)
+            else:
+                try:
+                    fiat = self.fiat_client.fetch_rates() or {}
+                    if isinstance(fiat, dict) and "rates" in fiat and isinstance(fiat["rates"], dict):
+                        updated_sources["exchangerate"] = len(fiat["rates"])
+                except ApiRequestError as e:
+                    self.logger.warning(f"ExchangeRate-API недоступен: {e}")
+                    warnings.append(f"ExchangeRate-API: {e}")
 
         # 3) текущая логика обновления pairs + сохранение rates.json
         existing_cache = self.storage.db.get_rates_cache() or {}
@@ -66,7 +70,14 @@ class RatesUpdater:
                     continue
                 pair_key = f"{code}_USD"
                 pairs[pair_key] = {"rate": float(rate), "updated_at": timestamp, "source": "CoinGecko"}
-                self._append_history_record(code, "USD", float(rate), timestamp, "CoinGecko")
+                self._append_history_record(
+                    code,
+                    "USD",
+                    float(rate),
+                    timestamp,
+                    "CoinGecko",
+                    meta=data.get("_meta") if isinstance(data, dict) else None,
+                )
         # fiat --> pairs
         if fiat and isinstance(fiat, dict) and "rates" in fiat:
             base = fiat.get("base", "USD")
@@ -84,7 +95,14 @@ class RatesUpdater:
                     "updated_at": timestamp,
                     "source": "ExchangeRate-API",
                 }
-                self._append_history_record(code, base, pair_rate, timestamp, "ExchangeRate-API")
+                self._append_history_record(
+                    code,
+                    base,
+                    pair_rate,
+                    timestamp,
+                    "ExchangeRate-API",
+                    meta=fiat.get("_meta") if isinstance(fiat, dict) else None,
+                )
 
         if pairs:
             cache = {"pairs": pairs, "last_refresh": timestamp}
@@ -108,7 +126,13 @@ class RatesUpdater:
         return datetime.now(timezone.utc).isoformat()
 
     def _append_history_record(
-        self, from_code: str, to_code: str, rate: float, timestamp: str, source: str
+        self,
+        from_code: str,
+        to_code: str,
+        rate: float,
+        timestamp: str,
+        source: str,
+        meta: dict | None = None,
     ) -> None:
         """Добавляет запись в history (exchange_rates.json)."""
         record = {
@@ -118,13 +142,18 @@ class RatesUpdater:
             "rate": rate,
             "timestamp": timestamp,
             "source": source,
+            "meta": {
+                "raw_id": from_code.lower(),
+            },
         }
+        if meta:
+            record["meta"].update(meta)
         try:
             self.storage.db.append_history_record(record)
         except Exception as exc:
             self.logger.warning(f"Не удалось записать историю курса {record['id']}: {exc}")
 
 
-def run_once() -> dict:
+def run_once(source: str | None = None) -> dict:
     """Запускает одно обновление, удобный шорткат."""
-    return RatesUpdater().update()
+    return RatesUpdater().update(source=source)

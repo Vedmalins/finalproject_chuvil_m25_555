@@ -8,6 +8,7 @@ from typing import Any
 import requests
 from requests import Response
 
+from valutatrade_hub.core.exceptions import ApiRequestError
 from valutatrade_hub.logging_config import get_logger
 from valutatrade_hub.parser_service.config import (
     BASE_FIAT_CURRENCY,
@@ -32,21 +33,34 @@ class BaseApiClient(ABC):
 
     def _make_request(self, url: str, params: dict | None = None) -> dict[str, Any]:
         """GET запрос с таймаутом, ошибки логируются."""
+        import time
+
+        start = time.monotonic()
         try:
             resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
         except requests.RequestException as e:
             self.logger.error(f"Запрос к {url} не выполнен: {e}")
-            return {}
+            raise ApiRequestError(str(e)) from e
+        duration_ms = int((time.monotonic() - start) * 1000)
 
         if not self._is_success(resp):
             self._log_bad_status(resp)
-            return {}
+            raise ApiRequestError(f"HTTP {resp.status_code} for {resp.url}")
 
         try:
-            return resp.json()
-        except ValueError:
+            data = resp.json()
+        except ValueError as e:
             self.logger.error(f"Невалидный JSON от {url}")
-            return {}
+            raise ApiRequestError("invalid json") from e
+        # прикрепляем мета в ответ
+        if isinstance(data, dict):
+            headers = getattr(resp, "headers", {}) or {}
+            data["_meta"] = {
+                "status_code": resp.status_code,
+                "request_ms": duration_ms,
+                "etag": headers.get("ETag"),
+            }
+        return data
 
     def _is_success(self, resp: Response) -> bool:
         return 200 <= resp.status_code < 300
