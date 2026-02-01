@@ -47,15 +47,12 @@ class TradingCLI:
             "quit": self._cmd_exit,
             "register": self._cmd_register,
             "login": self._cmd_login,
-
-            # курсы: расширенная версия с фильтрами
+            # курсы, расширенная версия с фильтрами
             "rates": self._cmd_show_rates,
             "show-rates": self._cmd_show_rates,
             "showrates": self._cmd_show_rates,
-
             "rate": self._cmd_rate,
             "get-rate": self._cmd_rate,
-
             "update": self._cmd_update,
             "update-rates": self._cmd_update,
         }
@@ -63,7 +60,6 @@ class TradingCLI:
         self.auth_cmds = {
             "portfolio": self._cmd_portfolio,
             "show-portfolio": self._cmd_portfolio,
-
             "buy": self._cmd_buy,
             "sell": self._cmd_sell,
            "logout": self._cmd_logout,
@@ -84,7 +80,7 @@ class TradingCLI:
                 self.logger.error(f"неожиданная ошибка: {exc}")
                 print(f"Ошибка: {exc}")
 
-    # --- утилиты ввода/вывода ---
+    # утилиты ввода-вывода
 
     def _print_welcome(self) -> None:
         """Мини-баннер при старте."""
@@ -273,7 +269,6 @@ class TradingCLI:
         except (InvalidCurrencyError, StaleRatesError, ValidationError, CurrencyNotFoundError, ApiRequestError) as exc:
             print(f"Ошибка: {exc}")
 
-
     def _cmd_update(self, args: list[str]) -> None:
         """Тянет свежие курсы из сетки."""
         print("Обновляю курсы, секундочку...")
@@ -283,15 +278,12 @@ class TradingCLI:
             return
 
         try:
-            result = run_once(source=source)  # теперь возвращает словарь
+            result = run_once(source=source)
         except Exception as exc:
-            # если действительно фатальная,
-            # её можно показать пользователю.
             self.logger.error(f"update fail: {exc}")
             print(f"Ошибка обновления: {exc}")
             return
 
-        # Нефатальные предупреждения
         warnings = []
         if isinstance(result, dict):
             warnings = result.get("warnings", []) or []
@@ -308,12 +300,12 @@ class TradingCLI:
             print(summary)
         print("Готово")
 
+
     def _cmd_show_rates(self, args: list[str]) -> None:
         """Показывает курсы из кеша с фильтрами."""
         currency_filter = self._get_flag(args, "--currency")
         top_raw = self._get_flag(args, "--top")
         base = self._get_flag(args, "--base") or "USD"
-
         rates = get_all_rates()
         if not rates:
             print("Локальный кеш курсов пуст. Выполните 'update-rates'.")
@@ -338,7 +330,6 @@ class TradingCLI:
                     converted[f"{code}_{base.upper()}"] = rate / rates[base_pair]
             rates = converted or rates
 
-        # сортировка
         sorted_items = sorted(rates.items(), key=lambda kv: kv[0])
         if top_raw:
             try:
@@ -360,8 +351,6 @@ class TradingCLI:
             table.add_row([pair, f"{rate:,.6f}"])
         print(table)
 
-
-    # команды после логина
 
     def _cmd_logout(self, args: list[str]) -> None:
         """Выход из аккаунта."""

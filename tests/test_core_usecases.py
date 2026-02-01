@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import types
 from datetime import datetime, timezone
 from pathlib import Path
 
