@@ -77,5 +77,14 @@ finalproject_chuvil_m25_555/
 - Юнит-тесты: `python -m pytest` (или `poetry run pytest`).
 - Линтер: `ruff check .` (цель `make lint`).
 
-## Демо (asciinema/GIF)
-- Деморолик будет добавлен позже; сценарий: register → login → rates → update → buy/sell → portfolio → rate.
+## Демо (asciinema)
+
+▶️ Запись работы CLI:  
+https://asciinema.org/a/sCoHSVQTOljY1uVl
+
+Сценарий:
+- register → login
+- update-rates / show-rates
+- get-rate
+- buy / sell (обработка ошибок)
+- show-portfolio
