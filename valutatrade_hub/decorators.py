@@ -65,7 +65,7 @@ def log_action(action: str, verbose: bool = False) -> Callable[[F], F]:
 
                 raise
 
-        return wrapper  # type: ignore
+        return wrapper
 
     return decorator
 

@@ -32,7 +32,7 @@ class RatesStorage:
         # если есть прямой курс к USD
         if key in pairs:
             return pairs[key].get("rate")
-        # иначе попробуем перевернуть USD->code
+        # иначе попробуем перевернуть USD в code
         reverse_key = f"USD_{code}"
         if reverse_key in pairs:
             rate = pairs[reverse_key].get("rate")

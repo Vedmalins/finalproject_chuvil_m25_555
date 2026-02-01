@@ -69,7 +69,6 @@ class RatesUpdater:
             if pair.split("_", 1)[0] in allowed_codes and pair.split("_", 1)[-1] in allowed_codes
         }
 
-        # crypto --> pairs
         if crypto:
             for code, data in crypto.items():
                 if str(code).startswith("_"):
@@ -87,7 +86,6 @@ class RatesUpdater:
                     "CoinGecko",
                     meta=data.get("_meta") if isinstance(data, dict) else None,
                 )
-        # fiat --> pairs
         if fiat and isinstance(fiat, dict) and "rates" in fiat:
             base = fiat.get("base", "USD")
             for code, usd_to_code in fiat["rates"].items():

@@ -99,7 +99,7 @@ def buy(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
     if amount <= 0:
         raise ValidationError("'amount' должен быть положительным числом")
 
-    code = CurrencyRegistry.get_currency(currency_code).code  # валидирует
+    code = CurrencyRegistry.get_currency(currency_code).code
 
     rate_info = get_rate(code)
     rate = rate_info["rate"]

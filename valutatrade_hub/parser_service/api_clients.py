@@ -53,7 +53,6 @@ class BaseApiClient(ABC):
         except ValueError as e:
             self.logger.error(f"Невалидный JSON от {url}")
             raise ApiRequestError("invalid json") from e
-        # прикрепляем мета в ответ
         if isinstance(data, dict):
             headers = getattr(resp, "headers", {}) or {}
             data["_meta"] = {
@@ -93,7 +92,6 @@ class CoinGeckoClient(BaseApiClient):
     def fetch_rates(self) -> dict[str, Any]:
         """Возвращает словарь код -> {usd: rate}."""
         coin_ids = ",".join(CRYPTO_ID_MAP.values())
-        # база может быть уже с /simple/price, поэтому аккуратно
         url = self.base_url
         if "simple/price" not in url:
             url = url.rstrip("/") + "/simple/price"

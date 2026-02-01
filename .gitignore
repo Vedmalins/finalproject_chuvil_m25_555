@@ -1,12 +1,12 @@
-# Byte-compiled / optimized / DLL files
+# Скомпилированные / оптимизированные файлы Python
 __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
+# Расширения на C
 *.so
 
-# Distribution / packaging
+# Сборка и упаковка
 .Python
 build/
 develop-eggs/
@@ -28,11 +28,11 @@ wheels/
 *.manifest
 *.spec
 
-# Installer logs
+# Логи установщиков
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Отчёты тестов и покрытия
 htmlcov/
 .tox/
 .nox/
@@ -46,11 +46,11 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Translations
+# Файлы переводов
 *.mo
 *.pot
 
-# Environments
+# Виртуальные окружения и переменные окружения
 .env
 .venv
 env/
@@ -59,13 +59,13 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDE
+# IDE и редакторы
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Project specific
+# Файлы проекта
 logs/
 *.log
 .DS_Store
