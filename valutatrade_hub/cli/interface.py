@@ -300,7 +300,6 @@ class TradingCLI:
             print(summary)
         print("Готово")
 
-
     def _cmd_show_rates(self, args: list[str]) -> None:
         """Показывает курсы из кеша с фильтрами."""
         currency_filter = self._get_flag(args, "--currency")
@@ -350,7 +349,6 @@ class TradingCLI:
         for pair, rate in sorted_items:
             table.add_row([pair, f"{rate:,.6f}"])
         print(table)
-
 
     def _cmd_logout(self, args: list[str]) -> None:
         """Выход из аккаунта."""

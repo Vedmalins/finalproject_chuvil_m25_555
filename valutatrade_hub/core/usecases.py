@@ -123,7 +123,6 @@ def buy(user_id: int, currency_code: str, amount: float) -> dict[str, Any]:
     after = target_wallet.balance
 
     db.save_portfolio(portfolio.to_dict())
-    # rates already in storage; no extra save
 
     return {
         "success": True,
@@ -191,7 +190,6 @@ def get_rate(from_code: str, to_code: str = "USD") -> dict[str, Any]:
     ttl = settings.rates_ttl
     storage = get_storage()
 
-    # пытаемся найти прямую пару FROM_TO
     pair_direct = f"{from_cur.code}_{to_cur.code}"
     pair_reverse = f"{to_cur.code}_{from_cur.code}"
 
@@ -237,15 +235,29 @@ def get_rate(from_code: str, to_code: str = "USD") -> dict[str, Any]:
 
 
 def _is_stale(updated_at: str | None, ttl_seconds: int) -> bool:
+    """True если updated_at пустой/битый/старее ttl.
+
+    Поддерживает ISO-строки как с '+00:00', так и с суффиксом 'Z'.
+    """
     if not updated_at:
         return True
+
+    value = updated_at.strip()
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+
     try:
-        ts = datetime.fromisoformat(updated_at)
+        ts = datetime.fromisoformat(value)
     except ValueError:
         return True
+
+    # если вдруг пришло без tzinfo, то UTC
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+
     now = datetime.now(timezone.utc)
-    delta = (now - ts).total_seconds()
-    return delta > ttl_seconds
+    return (now - ts.astimezone(timezone.utc)).total_seconds() > ttl_seconds
+
 
 
 def get_all_rates() -> dict[str, float]:
